@@ -18,8 +18,16 @@ class AppSettings(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_NOTIFICATIONS, value).apply()
 
     var demoAlertsEnabled: Boolean
-        get() = prefs.getBoolean(KEY_DEMO_ALERTS, true)
+        get() = prefs.getBoolean(KEY_DEMO_ALERTS, false)
         set(value) = prefs.edit().putBoolean(KEY_DEMO_ALERTS, value).apply()
+
+    var wazeLiveMapEnabled: Boolean
+        get() = prefs.getBoolean(KEY_WAZE_LIVE_MAP, true)
+        set(value) = prefs.edit().putBoolean(KEY_WAZE_LIVE_MAP, value).apply()
+
+    var tomTomApiKey: String
+        get() = prefs.getString(KEY_TOMTOM_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_TOMTOM_API_KEY, value.trim()).apply()
 
     var radiusMeters: Int
         get() = prefs.getInt(KEY_RADIUS_METERS, 3000)
@@ -58,6 +66,8 @@ class AppSettings(context: Context) {
         private const val KEY_MONITORING = "monitoring_enabled"
         private const val KEY_NOTIFICATIONS = "notifications_enabled"
         private const val KEY_DEMO_ALERTS = "demo_alerts_enabled"
+        private const val KEY_WAZE_LIVE_MAP = "waze_live_map_enabled"
+        private const val KEY_TOMTOM_API_KEY = "tomtom_api_key"
         private const val KEY_RADIUS_METERS = "radius_meters"
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"
         private const val KEY_THEME_MODE = "theme_mode"

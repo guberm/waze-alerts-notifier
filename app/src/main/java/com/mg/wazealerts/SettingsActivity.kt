@@ -9,9 +9,11 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.InputType
 import android.view.Gravity
 import android.widget.Button
 import android.widget.CompoundButton
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
@@ -57,6 +59,7 @@ class SettingsActivity : Activity() {
 
         header()
         appearancePanel()
+        sourcesPanel()
         behaviorPanel()
         alertTypesPanel()
         permissionPanel()
@@ -114,9 +117,42 @@ class SettingsActivity : Activity() {
             addSwitch("Notifications", settings.notificationsEnabled) {
                 settings.notificationsEnabled = it
             }
+        })
+    }
+
+    private fun sourcesPanel() {
+        root.addView(panel {
+            addView(sectionHeader("Sources", "Choose live feeds and fallbacks for active alerts."))
+            addSwitch("Waze Live Map", settings.wazeLiveMapEnabled) {
+                settings.wazeLiveMapEnabled = it
+            }
             addSwitch("Demo alert source", settings.demoAlertsEnabled) {
                 settings.demoAlertsEnabled = it
             }
+
+            addView(text("TomTom API key", 14f, palette.body), blockParams(top = 10.dp))
+            val tomTomKeyField = EditText(this@SettingsActivity).apply {
+                setText(settings.tomTomApiKey)
+                hint = "Optional global traffic source"
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                setSingleLine(true)
+                setTextColor(palette.title)
+                setHintTextColor(palette.secondary)
+                background = rounded(palette.surface, palette.border)
+                setPadding(12.dp, 8.dp, 12.dp, 8.dp)
+                setOnFocusChangeListener { _, hasFocus ->
+                    if (!hasFocus) settings.tomTomApiKey = text.toString()
+                }
+            }
+            addView(tomTomKeyField, blockParams(top = 6.dp))
+            addView(Button(this@SettingsActivity).apply {
+                text = "Save traffic key"
+                palette.styleButton(this)
+                setOnClickListener {
+                    settings.tomTomApiKey = tomTomKeyField.text.toString()
+                    currentFocus?.clearFocus()
+                }
+            }, blockParams(top = 8.dp))
         })
     }
 
