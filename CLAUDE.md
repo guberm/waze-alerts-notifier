@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.2.0` / `versionCode 2`
+- Current app version: `0.2.1` / `versionCode 3`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -16,6 +16,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
 - `AlertsCarAppService` exposes an Android Auto POI template screen.
 - Alert data is intentionally behind `AlertProvider`.
+- `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.
 - `DemoAlertProvider` generates local test alerts.
 - `WazeOfficialAlertProvider` currently returns no alerts because the public Waze docs do not expose a read API for nearby Waze user alerts.
 

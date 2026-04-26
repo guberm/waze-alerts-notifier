@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.LinearLayout
@@ -19,6 +18,9 @@ import android.widget.Switch
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.mg.wazealerts.model.AlertKind
 import com.mg.wazealerts.monitor.AlertMonitorService
 import com.mg.wazealerts.settings.AppSettings
@@ -29,6 +31,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         settings = AppSettings(this)
         render()
     }
@@ -36,11 +39,11 @@ class MainActivity : Activity() {
     private fun render() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 36, 32, 36)
         }
 
         val scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)
+        applySystemBarPadding(scroll)
 
         title("Waze Alerts Notifier")
         body("Nearby road alerts with radius filters, background monitoring, notifications, and Android Auto template support.")
@@ -111,7 +114,7 @@ class MainActivity : Activity() {
             textSize = 16f
             gravity = Gravity.CENTER_VERTICAL
             isChecked = checked
-            setPadding(0, 10, 0, 10)
+            setPadding(0, 6.dp, 0, 6.dp)
             setOnCheckedChangeListener { _: CompoundButton, enabled: Boolean -> onChanged(enabled) }
         }
         root.addView(view)
@@ -122,7 +125,7 @@ class MainActivity : Activity() {
             this.text = text
             textSize = 22f
             setTextColor(0xFF12332F.toInt())
-            setPadding(0, 22, 0, 8)
+            setPadding(0, 18.dp, 0, 8.dp)
         })
     }
 
@@ -131,9 +134,22 @@ class MainActivity : Activity() {
             this.text = text
             textSize = 15f
             setTextColor(0xFF35433F.toInt())
-            setPadding(0, 4, 0, 12)
+            setPadding(0, 4.dp, 0, 12.dp)
             root.addView(this)
         }
+    }
+
+    private fun applySystemBarPadding(scroll: ScrollView) {
+        val horizontal = 20.dp
+        val topExtra = 16.dp
+        val bottomExtra = 24.dp
+
+        ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            root.setPadding(horizontal, bars.top + topExtra, horizontal, bars.bottom + bottomExtra)
+            insets
+        }
+        ViewCompat.requestApplyInsets(scroll)
     }
 
     private fun requestNeededPermissions() {
@@ -157,4 +173,7 @@ class MainActivity : Activity() {
     private fun stopMonitoring() {
         stopService(Intent(this, AlertMonitorService::class.java))
     }
+
+    private val Int.dp: Int
+        get() = (this * resources.displayMetrics.density).toInt()
 }

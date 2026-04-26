@@ -23,6 +23,7 @@ app\build\outputs\apk\debug\app-debug.apk
 ## Implementation Notes
 
 - Real alert ingestion belongs behind `AlertProvider`.
+- Alert address display is resolved centrally in `AlertRepository` with Android `Geocoder`.
 - The demo provider is for local testing only.
 - Public Waze documentation supports Deep Links, not reading live Waze police/camera/roadwork alerts.
 - Android Auto support is implemented through `androidx.car.app` as a POI template app.

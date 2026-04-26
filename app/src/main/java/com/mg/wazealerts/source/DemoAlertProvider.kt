@@ -27,6 +27,7 @@ class DemoAlertProvider : AlertProvider {
                 kind = kind,
                 title = kind.label,
                 description = "${check[0].toInt()} m from your current location",
+                address = null,
                 latitude = point.first,
                 longitude = point.second,
                 distanceMeters = check[0],

@@ -120,8 +120,8 @@ class AlertMonitorService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(alert.title)
-            .setContentText(alert.description)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("${alert.description}\n${alert.kind.label}"))
+            .setContentText(alert.addressLine())
+            .setStyle(NotificationCompat.BigTextStyle().bigText("${alert.addressLine()}\n${alert.description}"))
             .setContentIntent(wazeIntent(alert))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -151,7 +151,7 @@ class AlertMonitorService : Service() {
 
     private fun wazeIntent(alert: RoadAlert): PendingIntent {
         val uri = Uri.parse(
-            "https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&z=10&utm_source=$packageName"
+            "https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&navigate=yes&z=10&utm_source=$packageName"
         )
         return PendingIntent.getActivity(
             this,
@@ -164,6 +164,9 @@ class AlertMonitorService : Service() {
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun RoadAlert.addressLine(): String =
+        address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(java.util.Locale.US, latitude, longitude)
 
     companion object {
         private const val ONGOING_NOTIFICATION_ID = 4100

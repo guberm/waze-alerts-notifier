@@ -1,8 +1,10 @@
 package com.mg.wazealerts.car
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import androidx.car.app.CarAppService
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
@@ -60,8 +62,9 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
                 listBuilder.addItem(
                     Row.Builder()
                         .setTitle(alert.title)
+                        .addText(alert.address ?: "${alert.latitude}, ${alert.longitude}")
                         .addText("${alert.distanceMeters.toInt()} m away")
-                        .addText(alert.description)
+                        .setOnClickListener { openNavigation(alert) }
                         .build()
                 )
             }
@@ -104,4 +107,11 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(carContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(carContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun openNavigation(alert: RoadAlert) {
+        val uri = Uri.parse(
+            "https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&navigate=yes&z=10&utm_source=${carContext.packageName}"
+        )
+        carContext.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }

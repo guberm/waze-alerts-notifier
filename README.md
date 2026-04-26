@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.2.0` (`versionCode 2`).
+Current version: `0.2.1` (`versionCode 3`).
 
 ## What works
 
@@ -12,6 +12,7 @@ Current version: `0.2.0` (`versionCode 2`).
 - Android notification channels for monitoring and road alerts.
 - Android Auto template service under the POI category.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
+- Reverse-geocoded alert addresses in phone notifications and Android Auto.
 
 ## Waze data limitation
 
@@ -53,5 +54,5 @@ The app declares an `androidx.car.app.category.POI` `CarAppService` and shows ne
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-WazeAlertsNotifier-debug-v0.2.0.apk
+WazeAlertsNotifier-debug-v0.2.1.apk
 ```

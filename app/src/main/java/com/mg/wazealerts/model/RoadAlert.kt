@@ -5,6 +5,7 @@ data class RoadAlert(
     val kind: AlertKind,
     val title: String,
     val description: String,
+    val address: String?,
     val latitude: Double,
     val longitude: Double,
     val distanceMeters: Float,
