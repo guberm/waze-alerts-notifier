@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.3.0` / `versionCode 4`
+- Current app version: `0.4.0` / `versionCode 5`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -14,6 +14,8 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 
 - `MainActivity` is the operational dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - `SettingsActivity` owns background monitoring, notification, demo source, alert type, and permission controls.
+- `ThemeMode` and `UiPalette` provide System, Light, and Dark rendering for the View-based UI.
+- The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
 - `AlertsCarAppService` exposes an Android Auto POI template screen.
 - Alert data is intentionally behind `AlertProvider`.

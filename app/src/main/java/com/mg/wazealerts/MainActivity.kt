@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.GradientDrawable
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
@@ -23,6 +24,7 @@ import com.mg.wazealerts.model.RoadAlert
 import com.mg.wazealerts.settings.AppSettings
 import com.mg.wazealerts.source.AlertRepository
 import com.mg.wazealerts.store.AlertStore
+import com.mg.wazealerts.ui.UiPalette
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var repository: AlertRepository
     private lateinit var alertStore: AlertStore
     private lateinit var root: LinearLayout
+    private lateinit var palette: UiPalette
     private var activeAlerts: List<RoadAlert> = emptyList()
     private var statusText: String = "Refresh to load nearby alerts"
 
@@ -44,11 +47,20 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         settings = AppSettings(this)
+        palette = UiPalette.from(this, settings.themeMode)
+        palette.applyWindow(this)
         repository = AlertRepository(this)
         alertStore = AlertStore(this)
         activeAlerts = alertStore.activeAlerts()
         render()
         refreshAlerts()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::settings.isInitialized && ::root.isInitialized) {
+            render()
+        }
     }
 
     override fun onDestroy() {
@@ -57,15 +69,23 @@ class MainActivity : Activity() {
     }
 
     private fun render() {
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val scroll = ScrollView(this).apply { addView(root) }
+        palette = UiPalette.from(this, settings.themeMode)
+        palette.applyWindow(this)
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(palette.background)
+        }
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(palette.background)
+            isFillViewport = true
+            addView(root)
+        }
         setContentView(scroll)
         applySystemBarPadding(scroll)
 
         header()
-        radiusControl()
-        refreshTimeControl()
-        activeAlertsSection()
+        controlsPanel()
+        alertsPanel()
     }
 
     private fun header() {
@@ -73,131 +93,153 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(TextView(this).apply {
-            text = "Waze Alerts"
-            textSize = 28f
-            setTextColor(0xFF12332F.toInt())
+        row.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text("Waze Alerts", 24f, palette.title, bold = true))
+            addView(text("Nearby road intelligence", 13f, palette.secondary))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
         row.addView(Button(this).apply {
             text = "Settings"
+            palette.styleButton(this, compact = true)
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         root.addView(row)
-
-        body("Set the search radius and refresh cadence, then review active alerts below.")
+        root.addView(statusStrip())
     }
 
-    private fun radiusControl() {
-        sectionTitle("Radius")
-        val label = body("${settings.radiusMeters} m")
-        root.addView(SeekBar(this).apply {
-            max = 49_750
-            progress = settings.radiusMeters - 250
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val radius = progress + 250
-                    settings.radiusMeters = radius
-                    label.text = "$radius m"
-                }
-
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                    refreshAlerts()
-                }
-            })
-        })
-    }
-
-    private fun refreshTimeControl() {
-        sectionTitle("Refresh Time")
-        val label = body(formatRefresh(settings.pollIntervalMillis))
-        root.addView(SeekBar(this).apply {
-            max = REFRESH_STEPS - 1
-            progress = millisToRefreshStep(settings.pollIntervalMillis)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val millis = refreshStepToMillis(progress)
-                    settings.pollIntervalMillis = millis
-                    label.text = formatRefresh(millis)
-                }
-
-                override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
-            })
-        })
-    }
-
-    private fun activeAlertsSection() {
-        sectionTitle("Active Alerts")
-        body(statusText)
-
-        Button(this).apply {
-            text = "Refresh alerts"
-            setOnClickListener { refreshAlerts() }
-            root.addView(this)
+    private fun statusStrip(): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 14.dp, 0, 4.dp)
         }
+        row.addView(chip("${settings.radiusMeters} m"))
+        row.addView(chip(formatRefresh(settings.pollIntervalMillis)))
+        row.addView(chip("${activeAlerts.size} active"))
+        return row
+    }
+
+    private fun controlsPanel() {
+        root.addView(panel {
+            addView(sectionHeader("Controls", "Tune the scan area and update cadence."))
+            addView(sliderRow(
+                label = "Radius",
+                value = "${settings.radiusMeters} m",
+                max = 49_750,
+                progress = settings.radiusMeters - 250,
+                onProgress = { progress -> settings.radiusMeters = progress + 250 },
+                valueText = { "${settings.radiusMeters} m" },
+                onStop = { refreshAlerts() }
+            ))
+            addView(sliderRow(
+                label = "Refresh time",
+                value = formatRefresh(settings.pollIntervalMillis),
+                max = REFRESH_STEPS - 1,
+                progress = millisToRefreshStep(settings.pollIntervalMillis),
+                onProgress = { progress -> settings.pollIntervalMillis = refreshStepToMillis(progress) },
+                valueText = { formatRefresh(settings.pollIntervalMillis) },
+                onStop = {}
+            ))
+        })
+    }
+
+    private fun alertsPanel() {
+        root.addView(sectionHeader("Active Alerts", statusText))
+
+        root.addView(Button(this).apply {
+            text = "Refresh alerts"
+            palette.styleButton(this)
+            setOnClickListener { refreshAlerts() }
+        }, blockParams(top = 6.dp, bottom = 10.dp))
 
         if (activeAlerts.isEmpty()) {
-            body("No active alerts loaded.")
+            root.addView(emptyState())
             return
         }
 
         activeAlerts.forEach { alert ->
-            alertRow(alert)
+            root.addView(alertCard(alert), blockParams(top = 6.dp, bottom = 8.dp))
         }
     }
 
-    private fun alertRow(alert: RoadAlert) {
+    private fun alertCard(alert: RoadAlert): LinearLayout {
         val muted = alertStore.isMuted(alert.id)
-        val card = LinearLayout(this).apply {
+        return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(14.dp, 12.dp, 14.dp, 12.dp)
-            background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(if (muted) 0xFFE8E8E8.toInt() else 0xFFFFFFFF.toInt())
-                setStroke(1.dp, 0xFFD6DEDB.toInt())
-                cornerRadius = 6.dp.toFloat()
+            background = rounded(if (muted) palette.mutedSurface else palette.surface, palette.border)
+
+            val top = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
             }
-        }
+            top.addView(text(alert.title, 18f, palette.title, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            top.addView(chip("${alert.distanceMeters.toInt()} m"))
+            addView(top)
 
-        card.addView(TextView(this).apply {
-            text = alert.title
-            textSize = 18f
-            setTextColor(0xFF12332F.toInt())
-        })
-        card.addView(TextView(this).apply {
-            text = alert.address ?: coordinateLabel(alert)
-            textSize = 14f
-            setTextColor(0xFF35433F.toInt())
-        })
-        card.addView(TextView(this).apply {
-            text = "${alert.distanceMeters.toInt()} m away"
-            textSize = 13f
-            setTextColor(0xFF50615D.toInt())
-        })
+            addView(text(alert.address ?: coordinateLabel(alert), 13f, palette.body), blockParams(top = 7.dp))
+            addView(text(if (muted) "Notifications muted for this alert" else "Notifications enabled", 12f, if (muted) palette.danger else palette.secondary), blockParams(top = 5.dp))
 
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 8.dp, 0, 0)
-        }
-        actions.addView(Button(this).apply {
-            text = "Navigate"
-            setOnClickListener { openNavigation(alert) }
-        })
-        actions.addView(Button(this).apply {
-            text = if (muted) "Unmute" else "Mute"
-            setOnClickListener {
-                alertStore.setMuted(alert.id, !muted)
-                render()
+            val actions = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 10.dp, 0, 0)
             }
-        })
-        card.addView(actions)
+            actions.addView(Button(this@MainActivity).apply {
+                text = "Navigate"
+                palette.styleButton(this, compact = true)
+                setOnClickListener { openNavigation(alert) }
+            })
+            actions.addView(Button(this@MainActivity).apply {
+                text = if (muted) "Unmute" else "Mute"
+                palette.styleButton(this, selected = muted, compact = true)
+                setOnClickListener {
+                    alertStore.setMuted(alert.id, !muted)
+                    render()
+                }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(8.dp, 0, 0, 0)
+            })
+            addView(actions)
+        }
+    }
 
-        root.addView(card, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(0, 8.dp, 0, 8.dp) })
+    private fun sliderRow(
+        label: String,
+        value: String,
+        max: Int,
+        progress: Int,
+        onProgress: (Int) -> Unit,
+        valueText: () -> String,
+        onStop: () -> Unit
+    ): LinearLayout {
+        val valueView = text(value, 14f, palette.title, bold = true)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 12.dp, 0, 0)
+            val row = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(text(label, 14f, palette.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(valueView)
+            addView(row)
+            addView(SeekBar(this@MainActivity).apply {
+                this.max = max
+                this.progress = progress
+                setPadding(0, 2.dp, 0, 0)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        onProgress(progress)
+                        valueView.text = valueText()
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) = onStop()
+                })
+            })
+        }
     }
 
     private fun refreshAlerts() {
@@ -213,7 +255,7 @@ class MainActivity : Activity() {
         LocationServices.getFusedLocationProviderClient(this).lastLocation
             .addOnSuccessListener { location: Location? ->
                 if (location == null) {
-                    statusText = "Location unavailable. Try again after the device gets a GPS fix."
+                    statusText = "Location unavailable. Try again after GPS gets a fix."
                     activeAlerts = alertStore.activeAlerts()
                     render()
                     return@addOnSuccessListener
@@ -250,29 +292,62 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun sectionTitle(text: String) {
-        root.addView(TextView(this).apply {
-            this.text = text
-            textSize = 22f
-            setTextColor(0xFF12332F.toInt())
-            setPadding(0, 20.dp, 0, 6.dp)
-        })
-    }
-
-    private fun body(text: String): TextView {
-        return TextView(this).apply {
-            this.text = text
-            textSize = 15f
-            setTextColor(0xFF35433F.toInt())
-            setPadding(0, 4.dp, 0, 10.dp)
-            root.addView(this)
+    private fun sectionHeader(title: String, subtitle: String): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 12.dp, 0, 6.dp)
+            addView(text(title, 18f, palette.title, bold = true))
+            addView(text(subtitle, 13f, palette.secondary), blockParams(top = 3.dp))
         }
-    }
+
+    private fun panel(content: LinearLayout.() -> Unit): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(14.dp, 10.dp, 14.dp, 14.dp)
+            background = rounded(palette.panel, palette.border)
+            content()
+        }.also {
+            it.layoutParams = blockParams(top = 12.dp, bottom = 10.dp)
+        }
+
+    private fun emptyState(): TextView =
+        text("No active alerts loaded.", 14f, palette.secondary).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, 22.dp, 0, 22.dp)
+            background = rounded(palette.panel, palette.border)
+        }
+
+    private fun chip(label: String): TextView =
+        text(label, 12f, palette.title, bold = true).apply {
+            setPadding(9.dp, 5.dp, 9.dp, 5.dp)
+            background = rounded(palette.accentSoft, 0)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(0, 0, 8.dp, 0)
+            }
+        }
+
+    private fun text(value: String, size: Float, color: Int, bold: Boolean = false): TextView =
+        TextView(this).apply {
+            text = value
+            palette.styleText(this, color, size, bold)
+        }
+
+    private fun rounded(fill: Int, stroke: Int): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = 8.dp.toFloat()
+            if (stroke != 0) setStroke(1.dp, stroke)
+        }
+
+    private fun blockParams(top: Int = 0, bottom: Int = 0): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, top, 0, bottom)
+        }
 
     private fun applySystemBarPadding(scroll: ScrollView) {
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            root.setPadding(20.dp, bars.top + 16.dp, 20.dp, bars.bottom + 24.dp)
+            root.setPadding(16.dp, bars.top + 16.dp, 16.dp, bars.bottom + 24.dp)
             insets
         }
         ViewCompat.requestApplyInsets(scroll)

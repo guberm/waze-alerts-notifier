@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.3.0` (`versionCode 4`).
+Current version: `0.4.0` (`versionCode 5`).
 
 ## What works
 
@@ -15,6 +15,8 @@ Current version: `0.3.0` (`versionCode 4`).
 - Reverse-geocoded alert addresses in phone notifications and Android Auto.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Separate settings screen for background monitoring, notifications, demo source, alert type filters, and permissions.
+- Appearance setting with System, Light, and Dark modes.
+- Compact modern UI with status chips, grouped controls, and alert cards.
 
 ## Waze data limitation
 
@@ -50,7 +52,7 @@ Open the app, grant permissions, and enable background monitoring. On Android 11
 ## App screens
 
 - Main screen: radius slider, refresh time slider, active alert list, per-alert `Navigate`, and per-alert `Mute` / `Unmute`.
-- Settings screen: background monitoring, global notifications, demo alert source, alert type switches, and permission/system settings shortcuts.
+- Settings screen: appearance mode, background monitoring, global notifications, demo alert source, alert type switches, and permission/system settings shortcuts.
 
 ## Android Auto
 
@@ -61,5 +63,5 @@ The app declares an `androidx.car.app.category.POI` `CarAppService` and shows ne
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-WazeAlertsNotifier-debug-v0.3.0.apk
+WazeAlertsNotifier-debug-v0.4.0.apk
 ```
