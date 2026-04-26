@@ -13,10 +13,16 @@ class AlertRepository(context: Context) {
     private val demoProvider = DemoAlertProvider()
     private val wazeProvider = WazeLiveMapAlertProvider()
     private val tomTomProvider = TomTomTrafficAlertProvider()
+    private val osmCameraProvider = OpenStreetMapCameraProvider()
 
     suspend fun nearby(location: Location): List<RoadAlert> {
         val settings = AppSettings(appContext)
-        return (wazeProvider.alertsNear(location, settings) + tomTomProvider.alertsNear(location, settings) + demoProvider.alertsNear(location, settings))
+        return (
+            wazeProvider.alertsNear(location, settings) +
+                osmCameraProvider.alertsNear(location, settings) +
+                tomTomProvider.alertsNear(location, settings) +
+                demoProvider.alertsNear(location, settings)
+            )
             .filter { it.kind in settings.enabledKinds() }
             .sortedBy { it.distanceMeters }
             .map { it.withResolvedAddress() }

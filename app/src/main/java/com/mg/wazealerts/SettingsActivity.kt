@@ -126,6 +126,9 @@ class SettingsActivity : Activity() {
             addSwitch("Waze Live Map", settings.wazeLiveMapEnabled) {
                 settings.wazeLiveMapEnabled = it
             }
+            addSwitch("OpenStreetMap cameras", settings.osmCamerasEnabled) {
+                settings.osmCamerasEnabled = it
+            }
             addSwitch("Demo alert source", settings.demoAlertsEnabled) {
                 settings.demoAlertsEnabled = it
             }

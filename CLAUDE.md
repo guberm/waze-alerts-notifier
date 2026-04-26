@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.5.0` / `versionCode 6`
+- Current app version: `0.6.0` / `versionCode 7`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -22,6 +22,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 - `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.
 - `AlertStore` persists the latest active alerts and muted alert IDs.
 - `WazeLiveMapAlertProvider` calls the unofficial Waze Live Map GeoRSS endpoint with radius-derived bbox and `na`/`il`/`row` environment selection.
+- `OpenStreetMapCameraProvider` calls Overpass API for fixed speed/red-light camera data from OpenStreetMap tags and caps searches at 25 km.
 - `TomTomTrafficAlertProvider` calls TomTom Traffic API v5 when a user saves a TomTom API key.
 - `DemoAlertProvider` generates local test alerts and is off by default for new installs.
 
@@ -29,7 +30,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 
 Use official Waze Deep Links for opening Waze/Live Map at an alert location. The user explicitly accepted the permission/terms risk for an experimental Waze Live Map source; keep that provider isolated and fail closed because it can return 403 or change without notice.
 
-The stable production path is the keyed TomTom provider or another authorized traffic incident source. Waze Live Map is best-effort only.
+The stable production path is the keyed TomTom/HERE provider or another authorized traffic incident source. Waze Live Map and public Overpass are best-effort only.
 
 ## Release Checklist
 

@@ -25,6 +25,10 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_WAZE_LIVE_MAP, true)
         set(value) = prefs.edit().putBoolean(KEY_WAZE_LIVE_MAP, value).apply()
 
+    var osmCamerasEnabled: Boolean
+        get() = prefs.getBoolean(KEY_OSM_CAMERAS, true)
+        set(value) = prefs.edit().putBoolean(KEY_OSM_CAMERAS, value).apply()
+
     var tomTomApiKey: String
         get() = prefs.getString(KEY_TOMTOM_API_KEY, "") ?: ""
         set(value) = prefs.edit().putString(KEY_TOMTOM_API_KEY, value.trim()).apply()
@@ -67,6 +71,7 @@ class AppSettings(context: Context) {
         private const val KEY_NOTIFICATIONS = "notifications_enabled"
         private const val KEY_DEMO_ALERTS = "demo_alerts_enabled"
         private const val KEY_WAZE_LIVE_MAP = "waze_live_map_enabled"
+        private const val KEY_OSM_CAMERAS = "osm_cameras_enabled"
         private const val KEY_TOMTOM_API_KEY = "tomtom_api_key"
         private const val KEY_RADIUS_METERS = "radius_meters"
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"

@@ -30,6 +30,7 @@ app\build\outputs\apk\debug\app-debug.apk
 - Keep the phone UI compact and dashboard-like: status chips, grouped controls, and alert cards.
 - Per-alert mute state is stored through `AlertStore` and must be checked before posting notifications.
 - `WazeLiveMapAlertProvider` uses the unofficial Waze Live Map GeoRSS endpoint from `guberm/waze-alerts-monitor`; it must fail closed to an empty list because the endpoint can return 403 or change without notice.
+- `OpenStreetMapCameraProvider` uses Overpass API for fixed speed/red-light cameras; keep radius capped and fail closed because public Overpass instances rate-limit and can be unavailable.
 - `TomTomTrafficAlertProvider` is the keyed global traffic provider for incidents, roadwork, jams, and hazards.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
