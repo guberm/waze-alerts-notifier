@@ -27,6 +27,7 @@ import com.mg.wazealerts.R
 import com.mg.wazealerts.model.RoadAlert
 import com.mg.wazealerts.settings.AppSettings
 import com.mg.wazealerts.source.AlertRepository
+import com.mg.wazealerts.store.AlertStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,7 @@ class AlertMonitorService : Service() {
     private lateinit var fusedLocation: FusedLocationProviderClient
     private lateinit var settings: AppSettings
     private lateinit var repository: AlertRepository
+    private lateinit var alertStore: AlertStore
     private val notifiedIds = linkedSetOf<String>()
 
     private val locationCallback = object : LocationCallback() {
@@ -50,6 +52,7 @@ class AlertMonitorService : Service() {
         super.onCreate()
         settings = AppSettings(this)
         repository = AlertRepository(this)
+        alertStore = AlertStore(this)
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         createChannels()
     }
@@ -94,8 +97,9 @@ class AlertMonitorService : Service() {
     private fun checkAlerts(location: Location) {
         scope.launch {
             val alerts = repository.nearby(location)
+            alertStore.saveActiveAlerts(alerts)
             if (!settings.notificationsEnabled) return@launch
-            alerts.filterNot { it.id in notifiedIds }.forEach { alert ->
+            alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) }.forEach { alert ->
                 notifiedIds += alert.id
                 showAlert(alert)
             }

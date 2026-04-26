@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.2.1` (`versionCode 3`).
+Current version: `0.3.0` (`versionCode 4`).
 
 ## What works
 
@@ -13,6 +13,8 @@ Current version: `0.2.1` (`versionCode 3`).
 - Android Auto template service under the POI category.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
 - Reverse-geocoded alert addresses in phone notifications and Android Auto.
+- Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
+- Separate settings screen for background monitoring, notifications, demo source, alert type filters, and permissions.
 
 ## Waze data limitation
 
@@ -45,6 +47,11 @@ adb install -r app\build\outputs\apk\debug\app-debug.apk
 
 Open the app, grant permissions, and enable background monitoring. On Android 11+ background location may need to be granted from the system app settings screen.
 
+## App screens
+
+- Main screen: radius slider, refresh time slider, active alert list, per-alert `Navigate`, and per-alert `Mute` / `Unmute`.
+- Settings screen: background monitoring, global notifications, demo alert source, alert type switches, and permission/system settings shortcuts.
+
 ## Android Auto
 
 The app declares an `androidx.car.app.category.POI` `CarAppService` and shows nearby alerts in a car-safe list template. For production distribution through Google Play, validate the app against the current Android for Cars quality requirements.
@@ -54,5 +61,5 @@ The app declares an `androidx.car.app.category.POI` `CarAppService` and shows ne
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-WazeAlertsNotifier-debug-v0.2.1.apk
+WazeAlertsNotifier-debug-v0.3.0.apk
 ```
