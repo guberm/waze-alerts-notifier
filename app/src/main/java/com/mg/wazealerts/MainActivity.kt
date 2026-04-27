@@ -126,6 +126,7 @@ class MainActivity : Activity() {
         applySystemBarPadding(scroll)
 
         header()
+        if (settings.mapsNavigationActive) navPanel()
         controlsPanel()
         alertsPanel()
     }
@@ -140,6 +141,13 @@ class MainActivity : Activity() {
             addView(text("Waze Alerts", 24f, palette.title, bold = true))
             addView(text("Nearby road intelligence", 13f, palette.secondary))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        row.addView(Button(this).apply {
+            text = "Log"
+            palette.styleButton(this, compact = true)
+            setOnClickListener { startActivity(Intent(this@MainActivity, LogActivity::class.java)) }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, 0, 8.dp, 0)
         })
         row.addView(Button(this).apply {
             text = "Settings"
@@ -160,6 +168,10 @@ class MainActivity : Activity() {
         val refreshLabel = if (secondsToRefresh > 0) "${secondsToRefresh}s to next" else formatRefresh(settings.pollIntervalMillis)
         row.addView(chip(refreshLabel))
         row.addView(chip("${activeAlerts.size} active"))
+        if (settings.mapsNavigationActive) {
+            val nearest = displayAlerts().minByOrNull { it.distanceMeters }
+            if (nearest != null) row.addView(chip("⚠ ${formatDistance(nearest.distanceMeters)}"))
+        }
         return row
     }
 
@@ -173,6 +185,7 @@ class MainActivity : Activity() {
                 progress = RADIUS_STEPS.indexOf(RADIUS_STEPS.minByOrNull { kotlin.math.abs(it - settings.radiusMeters) } ?: RADIUS_STEPS.last()).coerceAtLeast(0),
                 onProgress = { progress -> settings.radiusMeters = RADIUS_STEPS[progress] },
                 valueText = { formatRadius(settings.radiusMeters) },
+                onStart = { countdownTimer?.cancel() },
                 onStop = { refreshAlerts() }
             ))
             addView(sliderRow(
@@ -182,13 +195,23 @@ class MainActivity : Activity() {
                 progress = REFRESH_STEPS_MILLIS.indexOf(REFRESH_STEPS_MILLIS.minByOrNull { kotlin.math.abs(it - settings.pollIntervalMillis) } ?: REFRESH_STEPS_MILLIS.last()).coerceAtLeast(0),
                 onProgress = { progress -> settings.pollIntervalMillis = REFRESH_STEPS_MILLIS[progress] },
                 valueText = { formatRefresh(settings.pollIntervalMillis) },
+                onStart = { countdownTimer?.cancel() },
                 onStop = { startCountdown() }
             ))
         })
     }
 
     private fun alertsPanel() {
-        root.addView(sectionHeader("Active Alerts", statusText))
+        val displayed = displayAlerts()
+        val subtitle = buildString {
+            append(statusText)
+            if (settings.mapsNavigationActive) {
+                val passedCount = alertStore.passedAlertIds().size
+                if (passedCount > 0) append(" ($passedCount passed)")
+                if (settings.routeFilterEnabled) append(" · ahead only")
+            }
+        }
+        root.addView(sectionHeader("Active Alerts", subtitle))
 
         root.addView(Button(this).apply {
             text = "Refresh alerts"
@@ -196,12 +219,12 @@ class MainActivity : Activity() {
             setOnClickListener { refreshAlerts() }
         }, blockParams(top = 6.dp, bottom = 10.dp))
 
-        if (activeAlerts.isEmpty()) {
+        if (displayed.isEmpty()) {
             root.addView(emptyState())
             return
         }
 
-        activeAlerts.forEach { alert ->
+        displayed.forEach { alert ->
             root.addView(alertCard(alert), blockParams(top = 6.dp, bottom = 8.dp))
         }
     }
@@ -255,6 +278,7 @@ class MainActivity : Activity() {
         progress: Int,
         onProgress: (Int) -> Unit,
         valueText: () -> String,
+        onStart: () -> Unit = {},
         onStop: () -> Unit
     ): LinearLayout {
         val valueView = text(value, 14f, palette.title, bold = true)
@@ -278,7 +302,7 @@ class MainActivity : Activity() {
                         valueView.text = valueText()
                     }
 
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = onStart()
                     override fun onStopTrackingTouch(seekBar: SeekBar?) = onStop()
                 })
             })
@@ -351,6 +375,95 @@ class MainActivity : Activity() {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 100)
+    }
+
+    private fun navPanel() {
+        root.addView(panel {
+            val titleRow = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val navChip = chip("Navigating").apply {
+                background = rounded(palette.accent, 0)
+                setTextColor(0xFFFFFFFF.toInt())
+            }
+            titleRow.addView(navChip)
+            val bearing = settings.lastBearingDegrees
+            if (bearing >= 0f) {
+                titleRow.addView(chip(bearingToDirection(bearing)), LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(8.dp, 0, 0, 0)
+                })
+            }
+            addView(titleRow)
+
+            val address = settings.currentLocationAddress
+            if (address.isNotBlank()) {
+                addView(text("You: $address", 13f, palette.body), blockParams(top = 6.dp))
+            }
+
+            val step = settings.navStepText
+            val sub = settings.navSubText
+            if (step.isNotBlank()) {
+                val line = if (sub.isNotBlank()) "$step  ·  $sub" else step
+                addView(text(line, 13f, palette.body), blockParams(top = 4.dp))
+            }
+
+            val nearest = displayAlerts().minByOrNull { it.distanceMeters }
+            val nearestText = if (nearest != null) "Nearest alert: ${formatDistance(nearest.distanceMeters)}" else "No alerts ahead"
+            addView(text(nearestText, 14f, if (nearest != null) palette.danger else palette.secondary, bold = nearest != null), blockParams(top = 6.dp))
+
+            val routeRow = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 10.dp, 0, 0)
+            }
+            routeRow.addView(text("Show ahead only", 13f, palette.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            routeRow.addView(Button(this@MainActivity).apply {
+                text = if (settings.routeFilterEnabled) "On" else "Off"
+                palette.styleButton(this, selected = settings.routeFilterEnabled, compact = true)
+                setOnClickListener {
+                    settings.routeFilterEnabled = !settings.routeFilterEnabled
+                    render()
+                }
+            })
+            addView(routeRow)
+        })
+    }
+
+    private fun displayAlerts(): List<RoadAlert> {
+        val passed = alertStore.passedAlertIds()
+        return if (settings.mapsNavigationActive) {
+            activeAlerts
+                .filterNot { it.id in passed }
+                .let { list -> if (settings.routeFilterEnabled) list.filter { alertIsAhead(it) } else list }
+        } else {
+            activeAlerts
+        }
+    }
+
+    private fun alertIsAhead(alert: RoadAlert): Boolean {
+        val bearing = settings.lastBearingDegrees
+        if (bearing < 0f) return true
+        val lat = settings.lastLatitude.toDouble()
+        val lon = settings.lastLongitude.toDouble()
+        if (lat == 0.0 && lon == 0.0) return true
+        val from = Location("device").apply { latitude = lat; longitude = lon }
+        val to = Location("alert").apply { latitude = alert.latitude; longitude = alert.longitude }
+        return bearingDiff(bearing, from.bearingTo(to)) <= 75f
+    }
+
+    private fun bearingDiff(a: Float, b: Float): Float {
+        var d = ((b - a + 360f) % 360f)
+        if (d > 180f) d = 360f - d
+        return d
+    }
+
+    private fun formatDistance(meters: Float): String =
+        if (meters >= 1000f) "${"%.1f".format(Locale.US, meters / 1000f)} km" else "${meters.toInt()} m"
+
+    private fun bearingToDirection(degrees: Float): String {
+        val dirs = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+        return dirs[((degrees / 45 + 0.5f).toInt() % 8)]
     }
 
     private fun sectionHeader(title: String, subtitle: String): LinearLayout =

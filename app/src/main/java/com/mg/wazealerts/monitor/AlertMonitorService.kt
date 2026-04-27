@@ -37,6 +37,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
 import androidx.car.app.notification.CarAppExtender
+import com.mg.wazealerts.AppLogger
 
 class AlertMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -46,11 +47,26 @@ class AlertMonitorService : Service() {
     private lateinit var alertStore: AlertStore
     private val notifiedIds = linkedSetOf<String>()
     private var isMapsNavigating = false
+    private val prevDistances = HashMap<String, Float>()
+    private var lastGeocodedLocation: Location? = null
 
     private val navReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            val was = isMapsNavigating
             isMapsNavigating = intent?.getBooleanExtra("isNavigating", false) ?: false
             settings.mapsNavigationActive = isMapsNavigating
+            when {
+                !was && isMapsNavigating -> {
+                    prevDistances.clear()
+                    AppLogger.i(TAG, "Navigation started")
+                }
+                was && !isMapsNavigating -> {
+                    alertStore.clearPassed()
+                    settings.currentLocationAddress = ""
+                    prevDistances.clear()
+                    AppLogger.i(TAG, "Navigation ended — cleared passed alerts")
+                }
+            }
         }
     }
 
@@ -77,9 +93,11 @@ class AlertMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!settings.monitoringEnabled) {
+            AppLogger.w(TAG, "Monitoring disabled — stopping service")
             stopSelf()
             return START_NOT_STICKY
         }
+        AppLogger.i(TAG, "Service started (radius=${settings.radiusMeters}m, interval=${settings.pollIntervalMillis}ms)")
 
         ServiceCompat.startForeground(
             this,
@@ -114,23 +132,82 @@ class AlertMonitorService : Service() {
     }
 
     private fun checkAlerts(location: Location) {
+        if (location.hasBearing()) settings.lastBearingDegrees = location.bearing
+        settings.lastLatitude = location.latitude.toFloat()
+        settings.lastLongitude = location.longitude.toFloat()
+
         scope.launch {
+            AppLogger.d(TAG, "Location: %.4f,%.4f bearing=%s".format(
+                location.latitude, location.longitude,
+                if (location.hasBearing()) "${location.bearing.toInt()}°" else "n/a"
+            ))
+
             val alerts = repository.nearby(location)
+            AppLogger.i(TAG, "Fetched ${alerts.size} alerts (radius=${settings.radiusMeters}m)")
+
+            // Detect alerts that were passed during navigation
+            if (isMapsNavigating && settings.lastBearingDegrees >= 0f) {
+                val bearing = settings.lastBearingDegrees
+                for (alert in alerts) {
+                    val prev = prevDistances[alert.id]
+                    if (prev != null && alert.distanceMeters > prev + 250f) {
+                        val alertLoc = Location("").apply {
+                            latitude = alert.latitude
+                            longitude = alert.longitude
+                        }
+                        val diff = bearingDiff(bearing, location.bearingTo(alertLoc))
+                        if (diff > 100f) {
+                            alertStore.markPassed(alert.id)
+                            AppLogger.i(TAG, "Passed: ${alert.title} (${prev.toInt()}m → ${alert.distanceMeters.toInt()}m, diff=${diff.toInt()}°)")
+                        }
+                    }
+                    prevDistances[alert.id] = alert.distanceMeters
+                }
+                prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
+            }
+
             alertStore.saveActiveAlerts(alerts)
             sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+            geocodeCurrentPosition(location)
+
             if (!settings.notificationsEnabled) return@launch
-            // Google Maps does not expose route geometry to third-party apps; during navigation,
-            // monitor the live device position and surface native alerts around the current path.
             if (isMapsNavigating) {
-                alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) }.forEach { alert ->
+                val passed = alertStore.passedAlertIds()
+                alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) || it.id in passed }.forEach { alert ->
                     notifiedIds += alert.id
                     showAlert(alert)
+                    AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
                 }
             }
             while (notifiedIds.size > 100) {
                 notifiedIds.remove(notifiedIds.first())
             }
         }
+    }
+
+    private fun geocodeCurrentPosition(location: Location) {
+        val last = lastGeocodedLocation
+        if (last != null && last.distanceTo(location) < 150f) return
+        lastGeocodedLocation = location
+        scope.launch {
+            runCatching {
+                @Suppress("DEPRECATION")
+                val geocoder = android.location.Geocoder(this@AlertMonitorService, java.util.Locale.getDefault())
+                val addrs = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                val line = addrs?.firstOrNull()?.getAddressLine(0)
+                if (!line.isNullOrBlank()) {
+                    settings.currentLocationAddress = line
+                    sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+                    AppLogger.d(TAG, "Current address: $line")
+                }
+            }.onFailure { AppLogger.w(TAG, "Geocode current pos failed: ${it.message}") }
+        }
+    }
+
+    private fun bearingDiff(a: Float, b: Float): Float {
+        var d = ((b - a + 360f) % 360f)
+        if (d > 180f) d = 360f - d
+        return d
     }
 
     private fun ongoingNotification(): Notification =
@@ -202,6 +279,7 @@ class AlertMonitorService : Service() {
         address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(java.util.Locale.US, latitude, longitude)
 
     companion object {
+        private const val TAG = "AlertMonitor"
         private const val ONGOING_NOTIFICATION_ID = 4100
         private const val CHANNEL_MONITORING = "monitoring"
         private const val CHANNEL_ALERTS = "road_alerts"

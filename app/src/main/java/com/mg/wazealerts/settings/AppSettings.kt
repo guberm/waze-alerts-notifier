@@ -49,6 +49,34 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_MAPS_NAVIGATION_ACTIVE, false)
         set(value) = prefs.edit().putBoolean(KEY_MAPS_NAVIGATION_ACTIVE, value).apply()
 
+    var currentLocationAddress: String
+        get() = prefs.getString(KEY_CURRENT_LOC_ADDRESS, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_CURRENT_LOC_ADDRESS, value).apply()
+
+    var navStepText: String
+        get() = prefs.getString(KEY_NAV_STEP_TEXT, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_NAV_STEP_TEXT, value).apply()
+
+    var navSubText: String
+        get() = prefs.getString(KEY_NAV_SUB_TEXT, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_NAV_SUB_TEXT, value).apply()
+
+    var lastBearingDegrees: Float
+        get() = prefs.getFloat(KEY_LAST_BEARING, -1f)
+        set(value) = prefs.edit().putFloat(KEY_LAST_BEARING, value).apply()
+
+    var lastLatitude: Float
+        get() = prefs.getFloat(KEY_LAST_LAT, 0f)
+        set(value) = prefs.edit().putFloat(KEY_LAST_LAT, value).apply()
+
+    var lastLongitude: Float
+        get() = prefs.getFloat(KEY_LAST_LON, 0f)
+        set(value) = prefs.edit().putFloat(KEY_LAST_LON, value).apply()
+
+    var routeFilterEnabled: Boolean
+        get() = prefs.getBoolean(KEY_ROUTE_FILTER, false)
+        set(value) = prefs.edit().putBoolean(KEY_ROUTE_FILTER, value).apply()
+
     var themeMode: ThemeMode
         get() = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name)
@@ -86,5 +114,12 @@ class AppSettings(context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_LAST_VERSION_CODE = "last_version_code"
         private const val KEY_MAPS_NAVIGATION_ACTIVE = "maps_navigation_active"
+        private const val KEY_CURRENT_LOC_ADDRESS = "current_loc_address"
+        private const val KEY_NAV_STEP_TEXT = "nav_step_text"
+        private const val KEY_NAV_SUB_TEXT = "nav_sub_text"
+        private const val KEY_LAST_BEARING = "last_bearing"
+        private const val KEY_LAST_LAT = "last_lat"
+        private const val KEY_LAST_LON = "last_lon"
+        private const val KEY_ROUTE_FILTER = "route_filter"
     }
 }

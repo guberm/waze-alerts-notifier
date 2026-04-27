@@ -28,6 +28,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import com.mg.wazealerts.AppLogger
 
 class AlertsCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
@@ -52,6 +54,24 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
     }
 
     override fun onGetTemplate(): Template {
+        return try {
+            buildTemplate()
+        } catch (e: Exception) {
+            AppLogger.e("CarScreen", "Template error: ${e.message}")
+            ListTemplate.Builder()
+                .setTitle("Road alerts")
+                .setHeaderAction(Action.APP_ICON)
+                .setSingleList(
+                    ItemList.Builder()
+                        .addItem(Row.Builder().setTitle("Error").addText(e.message ?: "Unknown").build())
+                        .build()
+                )
+                .setLoading(false)
+                .build()
+        }
+    }
+
+    private fun buildTemplate(): Template {
         val listBuilder = ItemList.Builder()
         if (!settings.monitoringEnabled) {
             listBuilder.addItem(Row.Builder().setTitle("Monitoring is off").addText("Enable it in phone settings").build())
@@ -93,12 +113,18 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
                     return@addOnSuccessListener
                 }
                 scope.launch {
-                    alerts = repository.nearby(location)
-                    message = "Within ${settings.radiusMeters} m"
+                    try {
+                        alerts = withContext(Dispatchers.IO) { repository.nearby(location) }
+                        message = "Within ${settings.radiusMeters} m"
+                        AppLogger.d("CarScreen", "Loaded ${alerts.size} alerts")
+                    } catch (e: Exception) {
+                        AppLogger.e("CarScreen", "Fetch failed: ${e.message}")
+                    }
                     invalidate()
                 }
             }
             .addOnFailureListener {
+                AppLogger.e("CarScreen", "Location failed: ${it.message}")
                 message = "Location unavailable"
                 invalidate()
             }

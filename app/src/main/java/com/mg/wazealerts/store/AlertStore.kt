@@ -37,6 +37,19 @@ class AlertStore(context: Context) {
 
     fun mutedIds(): Set<String> = prefs.getStringSet(KEY_MUTED_ALERTS, emptySet()).orEmpty()
 
+    fun passedAlertIds(): Set<String> = prefs.getStringSet(KEY_PASSED_ALERTS, emptySet()).orEmpty()
+
+    fun markPassed(alertId: String) {
+        val ids = passedAlertIds().toMutableSet()
+        ids += alertId
+        val trimmed = if (ids.size > 200) ids.toList().takeLast(200).toSet() else ids
+        prefs.edit().putStringSet(KEY_PASSED_ALERTS, trimmed).apply()
+    }
+
+    fun clearPassed() {
+        prefs.edit().remove(KEY_PASSED_ALERTS).apply()
+    }
+
     private fun RoadAlert.toJson(): JSONObject =
         JSONObject()
             .put("id", id)
@@ -65,5 +78,6 @@ class AlertStore(context: Context) {
     companion object {
         private const val KEY_ACTIVE_ALERTS = "active_alerts"
         private const val KEY_MUTED_ALERTS = "muted_alerts"
+        private const val KEY_PASSED_ALERTS = "passed_alerts"
     }
 }

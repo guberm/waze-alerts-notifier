@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.8.0` (`versionCode 9`).
+Current version: `0.9.0` (`versionCode 10`).
 
 ## What works
 
@@ -54,7 +54,9 @@ Open the app, grant permissions, and enable background monitoring. On Android 11
 
 ## App Screens
 
-- Main screen: radius slider, refresh time slider, active alert list, per-alert `Navigate`, and per-alert `Mute` / `Unmute`.
+- Main screen: radius slider (crash-safe drag), refresh time slider, active alert list, per-alert `Navigate`, and per-alert `Mute` / `Unmute`.
+- **Navigation panel** (auto-shown when Google Maps is navigating): current geocoded address, route step text, nearest alert with distance, bearing direction chip, and "Ahead only" toggle.
+- **Log screen** ("Log" button in header): in-app log viewer with Clear / Copy / Export.
 - Settings screen: appearance mode, Waze Live Map source, OpenStreetMap cameras, optional TomTom API key, background monitoring, global notifications, demo alert source, alert type switches, and permission/system settings shortcuts.
 
 ## Android Auto
