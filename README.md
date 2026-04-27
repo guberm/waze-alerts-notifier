@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.6.0` (`versionCode 7`).
+Current version: `0.8.0` (`versionCode 9`).
 
 ## What works
 
@@ -13,7 +13,8 @@ Current version: `0.6.0` (`versionCode 7`).
 - Optional TomTom Traffic API source for global traffic incidents when an API key is saved.
 - Foreground location service for background monitoring.
 - Android notification channels for monitoring and road alerts.
-- Android Auto template service under the POI category.
+- Android Auto support through both a POI template screen and a media-browser entry.
+- Google Maps navigation notification detection for route-adjacent native alerts around the live device position.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
 - Reverse-geocoded alert addresses in the phone UI, phone notifications, and Android Auto.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
@@ -58,12 +59,14 @@ Open the app, grant permissions, and enable background monitoring. On Android 11
 
 ## Android Auto
 
-The app declares an `androidx.car.app.category.POI` `CarAppService` and shows nearby alerts in a car-safe list template. For production distribution through Google Play, validate the app against the current Android for Cars quality requirements.
+The app declares an `androidx.car.app.category.POI` `CarAppService` for the template screen and an Android media browser service so the app can appear in Android Auto's media section. The media browser exposes the latest stored active alerts as playable items; selecting one opens the Waze deep link for that alert.
+
+Google Maps route geometry is not exposed to third-party apps. When notification access is granted, `MapsNavigationListener` detects active Google Maps navigation notifications, starts monitoring if enabled, and `AlertMonitorService` posts native road-alert notifications around the live device position.
 
 ## Release
 
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-WazeAlertsNotifier-debug-v0.6.0.apk
+WazeAlertsNotifier-debug-v0.8.0.apk
 ```

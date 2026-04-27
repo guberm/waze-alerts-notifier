@@ -55,6 +55,7 @@ class MainActivity : Activity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "com.mg.wazealerts.ALERTS_UPDATED") {
                 activeAlerts = alertStore.activeAlerts()
+                statusText = "Showing ${activeAlerts.size} alert(s) within ${formatRadius(settings.radiusMeters)}."
                 render()
             }
         }
@@ -328,7 +329,7 @@ class MainActivity : Activity() {
             }
             override fun onFinish() {
                 secondsToRefresh = 0
-                render()
+                refreshAlerts()
             }
         }.start()
     }

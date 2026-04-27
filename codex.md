@@ -14,6 +14,8 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
+Current Android version: `0.8.0` / `versionCode 9`.
+
 ## GitHub Workflow
 
 - Use SSH remotes for git operations.
@@ -34,4 +36,5 @@ app\build\outputs\apk\debug\app-debug.apk
 - `TomTomTrafficAlertProvider` is the keyed global traffic provider for incidents, roadwork, jams, and hazards.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
-- Android Auto support is implemented through `androidx.car.app` in the `AUDIO` (media) category.
+- Android Auto support has two surfaces: `AlertsCarAppService` as an `androidx.car.app.category.POI` template app, and `AlertsMediaBrowserService` as the media-section browser service.
+- Google Maps navigation detection is notification-listener based. The app cannot read Google Maps route geometry, so route alerts are approximated by monitoring live device position while Maps navigation is active.

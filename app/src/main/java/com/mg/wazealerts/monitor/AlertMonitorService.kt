@@ -50,6 +50,7 @@ class AlertMonitorService : Service() {
     private val navReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             isMapsNavigating = intent?.getBooleanExtra("isNavigating", false) ?: false
+            settings.mapsNavigationActive = isMapsNavigating
         }
     }
 
@@ -64,6 +65,7 @@ class AlertMonitorService : Service() {
         settings = AppSettings(this)
         repository = AlertRepository(this)
         alertStore = AlertStore(this)
+        isMapsNavigating = settings.mapsNavigationActive
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         createChannels()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -115,12 +117,13 @@ class AlertMonitorService : Service() {
         scope.launch {
             val alerts = repository.nearby(location)
             alertStore.saveActiveAlerts(alerts)
-            sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED"))
+            sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
             if (!settings.notificationsEnabled) return@launch
-            // Only show heads-up notifications if Maps is navigating
-            alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) }.forEach { alert ->
-                notifiedIds += alert.id
-                if (isMapsNavigating) {
+            // Google Maps does not expose route geometry to third-party apps; during navigation,
+            // monitor the live device position and surface native alerts around the current path.
+            if (isMapsNavigating) {
+                alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) }.forEach { alert ->
+                    notifiedIds += alert.id
                     showAlert(alert)
                 }
             }

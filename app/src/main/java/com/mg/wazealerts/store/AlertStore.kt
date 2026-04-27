@@ -24,7 +24,7 @@ class AlertStore(context: Context) {
     fun saveActiveAlerts(alerts: List<RoadAlert>) {
         val array = JSONArray()
         alerts.forEach { array.put(it.toJson()) }
-        prefs.edit().putString(KEY_ACTIVE_ALERTS, array.toString()).apply()
+        prefs.edit().putString(KEY_ACTIVE_ALERTS, array.toString()).commit()
     }
 
     fun isMuted(alertId: String): Boolean = mutedIds().contains(alertId)

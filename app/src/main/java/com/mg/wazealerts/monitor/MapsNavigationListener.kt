@@ -1,38 +1,52 @@
 package com.mg.wazealerts.monitor
 
 import android.app.Notification
+import android.content.Intent
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
+import com.mg.wazealerts.settings.AppSettings
 
 class MapsNavigationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        checkMapsNavigation(sbn)
+        publishMapsNavigationState()
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         super.onNotificationRemoved(sbn)
-        checkMapsNavigation(sbn)
+        publishMapsNavigationState()
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        activeNotifications?.forEach { checkMapsNavigation(it) }
+        publishMapsNavigationState()
     }
 
-    private fun checkMapsNavigation(sbn: StatusBarNotification?) {
-        if (sbn?.packageName == "com.google.android.apps.maps") {
-            val isOngoing = sbn.isOngoing
-            val notification = sbn.notification
-            val hasNavigationCategory = notification.category == Notification.CATEGORY_NAVIGATION
-            val isNavigating = isOngoing && hasNavigationCategory
-            
-            // Broadcast the navigation state to the app
-            val intent = android.content.Intent("com.mg.wazealerts.MAPS_NAVIGATION_STATE")
-            intent.putExtra("isNavigating", isNavigating)
-            sendBroadcast(intent)
+    private fun publishMapsNavigationState() {
+        val isNavigating = activeNotifications?.any { it.isMapsNavigation() } == true
+        val settings = AppSettings(this)
+        settings.mapsNavigationActive = isNavigating
+
+        val intent = Intent("com.mg.wazealerts.MAPS_NAVIGATION_STATE").setPackage(packageName)
+        intent.putExtra("isNavigating", isNavigating)
+        sendBroadcast(intent)
+
+        if (isNavigating && settings.monitoringEnabled) {
+            runCatching {
+                val serviceIntent = Intent(this, AlertMonitorService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent)
+                } else {
+                    startService(serviceIntent)
+                }
+            }
         }
     }
+
+    private fun StatusBarNotification.isMapsNavigation(): Boolean =
+        packageName == "com.google.android.apps.maps" &&
+            isOngoing &&
+            notification.category == Notification.CATEGORY_NAVIGATION
 }

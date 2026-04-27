@@ -53,11 +53,20 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.AUDIO" />
+                <category android:name="androidx.car.app.category.POI" />
             </intent-filter>
             <meta-data
                 android:name="androidx.car.app.minCarApiLevel"
                 android:value="1" />
+        </service>
+
+        <service
+            android:name=".car.AlertsMediaBrowserService"
+            android:exported="true"
+            android:permission="android.permission.BIND_MEDIA_BROWSER_SERVICE">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
         </service>
     </application>
 </manifest>

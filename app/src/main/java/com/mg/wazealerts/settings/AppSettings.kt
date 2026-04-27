@@ -45,6 +45,10 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_LAST_VERSION_CODE, 0)
         set(value) = prefs.edit().putInt(KEY_LAST_VERSION_CODE, value).apply()
 
+    var mapsNavigationActive: Boolean
+        get() = prefs.getBoolean(KEY_MAPS_NAVIGATION_ACTIVE, false)
+        set(value) = prefs.edit().putBoolean(KEY_MAPS_NAVIGATION_ACTIVE, value).apply()
+
     var themeMode: ThemeMode
         get() = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name) ?: ThemeMode.SYSTEM.name)
@@ -81,5 +85,6 @@ class AppSettings(context: Context) {
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_LAST_VERSION_CODE = "last_version_code"
+        private const val KEY_MAPS_NAVIGATION_ACTIVE = "maps_navigation_active"
     }
 }
