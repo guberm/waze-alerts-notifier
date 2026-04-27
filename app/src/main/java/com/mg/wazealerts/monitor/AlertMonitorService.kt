@@ -33,6 +33,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.car.app.notification.CarAppExtender
 
 class AlertMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -41,6 +45,13 @@ class AlertMonitorService : Service() {
     private lateinit var repository: AlertRepository
     private lateinit var alertStore: AlertStore
     private val notifiedIds = linkedSetOf<String>()
+    private var isMapsNavigating = false
+
+    private val navReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            isMapsNavigating = intent?.getBooleanExtra("isNavigating", false) ?: false
+        }
+    }
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -55,6 +66,11 @@ class AlertMonitorService : Service() {
         alertStore = AlertStore(this)
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         createChannels()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(navReceiver, IntentFilter("com.mg.wazealerts.MAPS_NAVIGATION_STATE"), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(navReceiver, IntentFilter("com.mg.wazealerts.MAPS_NAVIGATION_STATE"))
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -75,6 +91,7 @@ class AlertMonitorService : Service() {
 
     override fun onDestroy() {
         fusedLocation.removeLocationUpdates(locationCallback)
+        unregisterReceiver(navReceiver)
         scope.cancel()
         super.onDestroy()
     }
@@ -98,10 +115,14 @@ class AlertMonitorService : Service() {
         scope.launch {
             val alerts = repository.nearby(location)
             alertStore.saveActiveAlerts(alerts)
+            sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED"))
             if (!settings.notificationsEnabled) return@launch
+            // Only show heads-up notifications if Maps is navigating
             alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) }.forEach { alert ->
                 notifiedIds += alert.id
-                showAlert(alert)
+                if (isMapsNavigating) {
+                    showAlert(alert)
+                }
             }
             while (notifiedIds.size > 100) {
                 notifiedIds.remove(notifiedIds.first())
@@ -121,6 +142,10 @@ class AlertMonitorService : Service() {
             .build()
 
     private fun showAlert(alert: RoadAlert) {
+        val carAppExtender = CarAppExtender.Builder()
+            .setImportance(NotificationManager.IMPORTANCE_HIGH)
+            .build()
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(alert.title)
@@ -130,6 +155,7 @@ class AlertMonitorService : Service() {
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .extend(carAppExtender)
             .build()
         getSystemService(NotificationManager::class.java).notify(alert.id.hashCode(), notification)
     }

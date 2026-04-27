@@ -31,7 +31,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.Build
+import android.os.CountDownTimer
 import java.util.Locale
+import android.app.AlertDialog
 
 class MainActivity : Activity() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -42,6 +48,17 @@ class MainActivity : Activity() {
     private lateinit var palette: UiPalette
     private var activeAlerts: List<RoadAlert> = emptyList()
     private var statusText: String = "Refresh to load nearby alerts"
+    private var countdownTimer: CountDownTimer? = null
+    private var secondsToRefresh: Int = 0
+
+    private val alertUpdateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.mg.wazealerts.ALERTS_UPDATED") {
+                activeAlerts = alertStore.activeAlerts()
+                render()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,16 +71,40 @@ class MainActivity : Activity() {
         activeAlerts = alertStore.activeAlerts()
         render()
         refreshAlerts()
+        showChangelogIfUpdated()
+    }
+
+    private fun showChangelogIfUpdated() {
+        val currentVersion = BuildConfig.VERSION_CODE
+        if (settings.lastVersionCode < currentVersion) {
+            settings.lastVersionCode = currentVersion
+            AlertDialog.Builder(this)
+                .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
+                .setMessage("• Android Auto media integration\n• Google Maps navigation detection\n• Native notifications along the route\n• New radius slider steps\n• Live refresh timer\n• Background sync fixes")
+                .setPositiveButton("OK") { d, _ -> d.dismiss() }
+                .show()
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(alertUpdateReceiver, IntentFilter("com.mg.wazealerts.ALERTS_UPDATED"), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(alertUpdateReceiver, IntentFilter("com.mg.wazealerts.ALERTS_UPDATED"))
+        }
         if (::settings.isInitialized && ::root.isInitialized) {
             render()
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(alertUpdateReceiver)
+    }
+
     override fun onDestroy() {
+        countdownTimer?.cancel()
         scope.cancel()
         super.onDestroy()
     }
@@ -115,7 +156,8 @@ class MainActivity : Activity() {
             setPadding(0, 14.dp, 0, 4.dp)
         }
         row.addView(chip("${settings.radiusMeters} m"))
-        row.addView(chip(formatRefresh(settings.pollIntervalMillis)))
+        val refreshLabel = if (secondsToRefresh > 0) "${secondsToRefresh}s to next" else formatRefresh(settings.pollIntervalMillis)
+        row.addView(chip(refreshLabel))
         row.addView(chip("${activeAlerts.size} active"))
         return row
     }
@@ -125,21 +167,21 @@ class MainActivity : Activity() {
             addView(sectionHeader("Controls", "Tune the scan area and update cadence."))
             addView(sliderRow(
                 label = "Radius",
-                value = "${settings.radiusMeters} m",
-                max = 49_750,
-                progress = settings.radiusMeters - 250,
-                onProgress = { progress -> settings.radiusMeters = progress + 250 },
-                valueText = { "${settings.radiusMeters} m" },
+                value = formatRadius(settings.radiusMeters),
+                max = RADIUS_STEPS.size - 1,
+                progress = RADIUS_STEPS.indexOf(RADIUS_STEPS.minByOrNull { kotlin.math.abs(it - settings.radiusMeters) } ?: RADIUS_STEPS.last()).coerceAtLeast(0),
+                onProgress = { progress -> settings.radiusMeters = RADIUS_STEPS[progress] },
+                valueText = { formatRadius(settings.radiusMeters) },
                 onStop = { refreshAlerts() }
             ))
             addView(sliderRow(
                 label = "Refresh time",
                 value = formatRefresh(settings.pollIntervalMillis),
-                max = REFRESH_STEPS - 1,
-                progress = millisToRefreshStep(settings.pollIntervalMillis),
-                onProgress = { progress -> settings.pollIntervalMillis = refreshStepToMillis(progress) },
+                max = REFRESH_STEPS_MILLIS.size - 1,
+                progress = REFRESH_STEPS_MILLIS.indexOf(REFRESH_STEPS_MILLIS.minByOrNull { kotlin.math.abs(it - settings.pollIntervalMillis) } ?: REFRESH_STEPS_MILLIS.last()).coerceAtLeast(0),
+                onProgress = { progress -> settings.pollIntervalMillis = REFRESH_STEPS_MILLIS[progress] },
                 valueText = { formatRefresh(settings.pollIntervalMillis) },
-                onStop = {}
+                onStop = { startCountdown() }
             ))
         })
     }
@@ -263,14 +305,32 @@ class MainActivity : Activity() {
                 scope.launch {
                     activeAlerts = withContext(Dispatchers.IO) { repository.nearby(location) }
                     alertStore.saveActiveAlerts(activeAlerts)
-                    statusText = "Showing ${activeAlerts.size} alert(s) within ${settings.radiusMeters} m."
+                    statusText = "Showing ${activeAlerts.size} alert(s) within ${formatRadius(settings.radiusMeters)}."
                     render()
+                    startCountdown()
                 }
             }
             .addOnFailureListener {
                 statusText = "Location unavailable."
                 render()
             }
+    }
+
+    private fun startCountdown() {
+        countdownTimer?.cancel()
+        secondsToRefresh = (settings.pollIntervalMillis / 1000).toInt()
+        countdownTimer = object : CountDownTimer(settings.pollIntervalMillis, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                secondsToRefresh = (millisUntilFinished / 1000).toInt()
+                // Just update the chip without full render to avoid flickering
+                // Or call render() if lightweight enough. Let's re-render
+                render()
+            }
+            override fun onFinish() {
+                secondsToRefresh = 0
+                render()
+            }
+        }.start()
     }
 
     private fun openNavigation(alert: RoadAlert) {
@@ -285,11 +345,11 @@ class MainActivity : Activity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun requestLocationPermissions() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
-            100
-        )
+        val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (Build.VERSION.SDK_INT >= 33) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 100)
     }
 
     private fun sectionHeader(title: String, subtitle: String): LinearLayout =
@@ -358,18 +418,17 @@ class MainActivity : Activity() {
         return if (seconds < 60) "${seconds}s" else "${seconds / 60} min"
     }
 
-    private fun refreshStepToMillis(step: Int): Long = (step + 1) * 15_000L
-
-    private fun millisToRefreshStep(millis: Long): Int =
-        ((millis / 15_000L).toInt() - 1).coerceIn(0, REFRESH_STEPS - 1)
-
     private fun coordinateLabel(alert: RoadAlert): String =
         "%.5f, %.5f".format(Locale.US, alert.latitude, alert.longitude)
+
+    private fun formatRadius(meters: Int): String =
+        if (meters >= 1000) "${meters / 1000} km" else "$meters m"
 
     private val Int.dp: Int
         get() = (this * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val REFRESH_STEPS = 60
+        private val REFRESH_STEPS_MILLIS = longArrayOf(30_000L, 60_000L, 120_000L, 180_000L, 300_000L)
+        private val RADIUS_STEPS = intArrayOf(100, 200, 300, 500, 1000, 2000, 3000)
     }
 }

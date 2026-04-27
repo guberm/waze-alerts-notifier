@@ -187,6 +187,13 @@ class SettingsActivity : Activity() {
                     })
                 }
             }, blockParams(top = 8.dp))
+            addView(Button(this@SettingsActivity).apply {
+                text = "Notification Access (for Maps)"
+                palette.styleButton(this)
+                setOnClickListener {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            }, blockParams(top = 8.dp))
         })
     }
 

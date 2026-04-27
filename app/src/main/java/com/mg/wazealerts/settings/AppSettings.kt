@@ -35,11 +35,15 @@ class AppSettings(context: Context) {
 
     var radiusMeters: Int
         get() = prefs.getInt(KEY_RADIUS_METERS, 3000)
-        set(value) = prefs.edit().putInt(KEY_RADIUS_METERS, value.coerceIn(250, 50000)).apply()
+        set(value) = prefs.edit().putInt(KEY_RADIUS_METERS, value.coerceIn(100, 50000)).apply()
 
     var pollIntervalMillis: Long
         get() = prefs.getLong(KEY_POLL_INTERVAL, 60_000L)
-        set(value) = prefs.edit().putLong(KEY_POLL_INTERVAL, value.coerceIn(15_000L, 15 * 60_000L)).apply()
+        set(value) = prefs.edit().putLong(KEY_POLL_INTERVAL, value.coerceIn(30_000L, 300_000L)).apply()
+
+    var lastVersionCode: Int
+        get() = prefs.getInt(KEY_LAST_VERSION_CODE, 0)
+        set(value) = prefs.edit().putInt(KEY_LAST_VERSION_CODE, value).apply()
 
     var themeMode: ThemeMode
         get() = runCatching {
@@ -76,5 +80,6 @@ class AppSettings(context: Context) {
         private const val KEY_RADIUS_METERS = "radius_meters"
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"
         private const val KEY_THEME_MODE = "theme_mode"
+        private const val KEY_LAST_VERSION_CODE = "last_version_code"
     }
 }

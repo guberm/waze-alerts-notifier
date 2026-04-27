@@ -34,4 +34,4 @@ app\build\outputs\apk\debug\app-debug.apk
 - `TomTomTrafficAlertProvider` is the keyed global traffic provider for incidents, roadwork, jams, and hazards.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
-- Android Auto support is implemented through `androidx.car.app` as a POI template app.
+- Android Auto support is implemented through `androidx.car.app` in the `AUDIO` (media) category.

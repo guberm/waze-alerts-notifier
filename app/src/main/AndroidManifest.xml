@@ -40,11 +40,20 @@
             android:foregroundServiceType="location" />
 
         <service
+            android:name=".monitor.MapsNavigationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".car.AlertsCarAppService"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.POI" />
+                <category android:name="androidx.car.app.category.AUDIO" />
             </intent-filter>
             <meta-data
                 android:name="androidx.car.app.minCarApiLevel"
