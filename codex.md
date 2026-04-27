@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.0` / `versionCode 10`.
+Current Android version: `0.9.1` / `versionCode 11`.
 
 ## GitHub Workflow
 

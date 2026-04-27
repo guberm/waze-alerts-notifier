@@ -30,14 +30,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mg.wazealerts.AppLogger
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 
 class AlertsCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
 
     override fun onCreateSession(sessionInfo: SessionInfo): Session {
+        AppLogger.i("CarService", "onCreateSession")
         return object : Session() {
-            override fun onCreateScreen(intent: android.content.Intent): Screen =
-                AlertsCarScreen(carContext)
+            override fun onCreateScreen(intent: android.content.Intent): Screen {
+                AppLogger.i("CarService", "onCreateScreen")
+                return AlertsCarScreen(carContext)
+            }
         }
     }
 }
@@ -48,8 +53,17 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
     private val repository = AlertRepository(carContext)
     private var alerts: List<RoadAlert> = emptyList()
     private var message: String = "Waiting for location"
+    private var destroyed = false
 
     init {
+        AppLogger.i("CarScreen", "Screen created")
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) {
+                destroyed = true
+                scope.cancel()
+                AppLogger.i("CarScreen", "Screen destroyed")
+            }
+        })
         refresh()
     }
 
@@ -58,16 +72,14 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
             buildTemplate()
         } catch (e: Exception) {
             AppLogger.e("CarScreen", "Template error: ${e.message}")
-            ListTemplate.Builder()
-                .setTitle("Road alerts")
-                .setHeaderAction(Action.APP_ICON)
-                .setSingleList(
-                    ItemList.Builder()
-                        .addItem(Row.Builder().setTitle("Error").addText(e.message ?: "Unknown").build())
-                        .build()
-                )
-                .setLoading(false)
-                .build()
+            safeFallbackTemplate(e.message)
+        }
+    }
+
+    private fun safeInvalidate() {
+        if (destroyed) return
+        runCatching { invalidate() }.onFailure {
+            AppLogger.e("CarScreen", "invalidate failed: ${it.message}")
         }
     }
 
@@ -98,36 +110,55 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
             .build()
     }
 
+    private fun safeFallbackTemplate(msg: String?): Template =
+        ListTemplate.Builder()
+            .setTitle("Road alerts")
+            .setHeaderAction(Action.APP_ICON)
+            .setSingleList(
+                ItemList.Builder()
+                    .addItem(Row.Builder().setTitle("Error loading alerts").addText(msg ?: "Unknown error").build())
+                    .build()
+            )
+            .setLoading(false)
+            .build()
+
     private fun refresh() {
+        AppLogger.d("CarScreen", "refresh() called, hasLocation=${hasLocationPermission()}")
         if (!hasLocationPermission()) {
             message = "Location permission is required"
             return
         }
 
-        LocationServices.getFusedLocationProviderClient(carContext)
-            .lastLocation
-            .addOnSuccessListener { location: Location? ->
-                if (location == null) {
-                    message = "Open the phone app once to get a location fix"
-                    invalidate()
-                    return@addOnSuccessListener
-                }
-                scope.launch {
-                    try {
-                        alerts = withContext(Dispatchers.IO) { repository.nearby(location) }
-                        message = "Within ${settings.radiusMeters} m"
-                        AppLogger.d("CarScreen", "Loaded ${alerts.size} alerts")
-                    } catch (e: Exception) {
-                        AppLogger.e("CarScreen", "Fetch failed: ${e.message}")
+        runCatching {
+            LocationServices.getFusedLocationProviderClient(carContext)
+                .lastLocation
+                .addOnSuccessListener { location: Location? ->
+                    if (location == null) {
+                        message = "Open the phone app once to get a location fix"
+                        safeInvalidate()
+                        return@addOnSuccessListener
                     }
-                    invalidate()
+                    scope.launch {
+                        try {
+                            alerts = withContext(Dispatchers.IO) { repository.nearby(location) }
+                            message = "Within ${settings.radiusMeters} m"
+                            AppLogger.d("CarScreen", "Loaded ${alerts.size} alerts")
+                        } catch (e: Exception) {
+                            AppLogger.e("CarScreen", "Fetch failed: ${e.message}")
+                        }
+                        safeInvalidate()
+                    }
                 }
-            }
-            .addOnFailureListener {
-                AppLogger.e("CarScreen", "Location failed: ${it.message}")
-                message = "Location unavailable"
-                invalidate()
-            }
+                .addOnFailureListener { e ->
+                    AppLogger.e("CarScreen", "Location failed: ${e.message}")
+                    message = "Location unavailable"
+                    safeInvalidate()
+                }
+        }.onFailure { e ->
+            AppLogger.e("CarScreen", "getFusedLocation threw: ${e.message}")
+            message = "Location service error"
+            safeInvalidate()
+        }
     }
 
     private fun hasLocationPermission(): Boolean =

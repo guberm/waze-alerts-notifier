@@ -63,6 +63,7 @@ class AlertMonitorService : Service() {
                 was && !isMapsNavigating -> {
                     alertStore.clearPassed()
                     settings.currentLocationAddress = ""
+                    settings.navDestination = ""
                     prevDistances.clear()
                     AppLogger.i(TAG, "Navigation ended — cleared passed alerts")
                 }

@@ -61,6 +61,10 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_NAV_SUB_TEXT, "") ?: ""
         set(value) = prefs.edit().putString(KEY_NAV_SUB_TEXT, value).apply()
 
+    var navDestination: String
+        get() = prefs.getString(KEY_NAV_DESTINATION, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_NAV_DESTINATION, value).apply()
+
     var lastBearingDegrees: Float
         get() = prefs.getFloat(KEY_LAST_BEARING, -1f)
         set(value) = prefs.edit().putFloat(KEY_LAST_BEARING, value).apply()
@@ -117,6 +121,7 @@ class AppSettings(context: Context) {
         private const val KEY_CURRENT_LOC_ADDRESS = "current_loc_address"
         private const val KEY_NAV_STEP_TEXT = "nav_step_text"
         private const val KEY_NAV_SUB_TEXT = "nav_sub_text"
+        private const val KEY_NAV_DESTINATION = "nav_destination"
         private const val KEY_LAST_BEARING = "last_bearing"
         private const val KEY_LAST_LAT = "last_lat"
         private const val KEY_LAST_LON = "last_lon"

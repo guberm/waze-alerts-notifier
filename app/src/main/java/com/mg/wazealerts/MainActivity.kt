@@ -398,14 +398,19 @@ class MainActivity : Activity() {
 
             val address = settings.currentLocationAddress
             if (address.isNotBlank()) {
-                addView(text("You: $address", 13f, palette.body), blockParams(top = 6.dp))
+                addView(text("📍 $address", 13f, palette.body), blockParams(top = 6.dp))
+            }
+
+            val destination = settings.navDestination
+            if (destination.isNotBlank()) {
+                addView(text("🏁 $destination", 13f, palette.accent, bold = true), blockParams(top = 4.dp))
             }
 
             val step = settings.navStepText
             val sub = settings.navSubText
             if (step.isNotBlank()) {
                 val line = if (sub.isNotBlank()) "$step  ·  $sub" else step
-                addView(text(line, 13f, palette.body), blockParams(top = 4.dp))
+                addView(text("▸ $line", 13f, palette.body), blockParams(top = 4.dp))
             }
 
             val nearest = displayAlerts().minByOrNull { it.distanceMeters }
