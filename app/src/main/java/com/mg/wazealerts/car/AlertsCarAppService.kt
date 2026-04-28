@@ -28,6 +28,7 @@ class AlertsCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
 
     override fun onCreateSession(sessionInfo: SessionInfo): Session {
+        AppLogger.init(this)
         AppLogger.i("CarService", "onCreateSession display=${sessionInfo.displayType}")
         return object : Session() {
             override fun onCreateScreen(intent: Intent): Screen {

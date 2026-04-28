@@ -347,9 +347,8 @@ class MainActivity : Activity() {
         countdownTimer = object : CountDownTimer(settings.pollIntervalMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 secondsToRefresh = (millisUntilFinished / 1000).toInt()
-                // Just update the chip without full render to avoid flickering
-                // Or call render() if lightweight enough. Let's re-render
-                render()
+                // Post to avoid calling setContentView() during an in-flight layout traversal
+                window.decorView.post { if (!isFinishing) render() }
             }
             override fun onFinish() {
                 secondsToRefresh = 0

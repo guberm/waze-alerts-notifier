@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.2` / `versionCode 12`
+- Current app version: `0.9.3` / `versionCode 13`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`

@@ -66,8 +66,7 @@
 
         <service
             android:name=".car.AlertsMediaBrowserService"
-            android:exported="true"
-            android:permission="android.permission.BIND_MEDIA_BROWSER_SERVICE">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
