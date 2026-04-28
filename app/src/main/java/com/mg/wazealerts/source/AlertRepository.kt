@@ -13,7 +13,7 @@ class AlertRepository(context: Context) {
     private val demoProvider = DemoAlertProvider()
     private val wazeProvider = WazeLiveMapAlertProvider()
     private val tomTomProvider = TomTomTrafficAlertProvider()
-    private val osmCameraProvider = OpenStreetMapCameraProvider()
+    private val osmCameraProvider = OpenStreetMapCameraProvider(context.applicationContext)
 
     suspend fun nearby(location: Location): List<RoadAlert> {
         val settings = AppSettings(appContext)

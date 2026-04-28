@@ -1,9 +1,12 @@
 package com.mg.wazealerts.source
 
+import android.content.Context
 import android.location.Location
+import com.mg.wazealerts.AppLogger
 import com.mg.wazealerts.model.AlertKind
 import com.mg.wazealerts.model.RoadAlert
 import com.mg.wazealerts.settings.AppSettings
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -12,19 +15,88 @@ import java.net.URLEncoder
 import java.util.Locale
 import kotlin.math.cos
 
-class OpenStreetMapCameraProvider : AlertProvider {
+class OpenStreetMapCameraProvider(private val context: Context) : AlertProvider {
     override suspend fun alertsNear(location: Location, settings: AppSettings): List<RoadAlert> {
         if (!settings.osmCamerasEnabled) return emptyList()
 
+        val cellKey = cellKey(location.latitude, location.longitude)
+        val cached = loadCache(cellKey)
+        if (cached != null) {
+            AppLogger.d("OSM", "Cache hit for cell $cellKey — ${cached.size} cameras")
+            return filterByRadius(cached, location, settings.radiusMeters)
+        }
+
+        AppLogger.i("OSM", "Cache miss for cell $cellKey — fetching Overpass")
         return runCatching {
-            val bbox = boundingBox(location.latitude, location.longitude, settings.radiusMeters)
+            // Always fetch at MAX_RADIUS so the cached result covers all future radius changes
+            val bbox = boundingBox(location.latitude, location.longitude, MAX_RADIUS_METERS)
             val query = overpassQuery(bbox)
             val body = fetch(query)
-            body.toAlerts(location, settings.radiusMeters)
+            val allCameras = body.toAlerts(location, MAX_RADIUS_METERS)
+            saveCache(cellKey, allCameras)
+            AppLogger.i("OSM", "Cached ${allCameras.size} cameras for cell $cellKey")
+            filterByRadius(allCameras, location, settings.radiusMeters)
         }.getOrElse {
+            AppLogger.w("OSM", "Overpass fetch failed: ${it.message}")
             emptyList()
         }
     }
+
+    // Cell ≈ 0.1° = ~11 km — if you stay in the cell, use cache; covers full 25 km fetch area
+    private fun cellKey(lat: Double, lon: Double): String {
+        val cellLat = kotlin.math.floor(lat * 10) / 10.0
+        val cellLon = kotlin.math.floor(lon * 10) / 10.0
+        return "%.1f_%.1f".format(Locale.US, cellLat, cellLon)
+    }
+
+    private fun filterByRadius(cameras: List<RoadAlert>, location: Location, radiusMeters: Int): List<RoadAlert> {
+        val origin = Location("filter").apply { latitude = location.latitude; longitude = location.longitude }
+        return cameras.mapNotNull { alert ->
+            val alertLoc = Location("alert").apply { latitude = alert.latitude; longitude = alert.longitude }
+            val dist = origin.distanceTo(alertLoc)
+            if (dist <= radiusMeters) alert.copy(distanceMeters = dist) else null
+        }
+    }
+
+    private fun loadCache(cellKey: String): List<RoadAlert>? {
+        val prefs = context.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE)
+        val fetchedAt = prefs.getLong("${cellKey}_t", 0L)
+        if (System.currentTimeMillis() - fetchedAt > CACHE_TTL_MS) return null
+        val json = prefs.getString("${cellKey}_d", null) ?: return null
+        return runCatching {
+            val arr = JSONArray(json)
+            (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.toCachedAlert() }
+        }.getOrNull()
+    }
+
+    private fun saveCache(cellKey: String, cameras: List<RoadAlert>) {
+        val arr = JSONArray()
+        cameras.forEach { arr.put(it.toCacheJson()) }
+        context.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE).edit()
+            .putLong("${cellKey}_t", System.currentTimeMillis())
+            .putString("${cellKey}_d", arr.toString())
+            .apply()
+    }
+
+    private fun RoadAlert.toCacheJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("title", title)
+        .put("description", description)
+        .put("address", address ?: "")
+        .put("lat", latitude)
+        .put("lon", longitude)
+
+    private fun JSONObject.toCachedAlert(): RoadAlert = RoadAlert(
+        id = getString("id"),
+        kind = AlertKind.CAMERA,
+        title = getString("title"),
+        description = getString("description"),
+        address = optString("address").takeIf { it.isNotBlank() },
+        latitude = getDouble("lat"),
+        longitude = getDouble("lon"),
+        distanceMeters = 0f,
+        reportedAtMillis = System.currentTimeMillis()
+    )
 
     private fun fetch(query: String): JSONObject {
         val encoded = URLEncoder.encode(query, "UTF-8")
@@ -176,5 +248,7 @@ class OpenStreetMapCameraProvider : AlertProvider {
     companion object {
         private const val METERS_PER_DEGREE_LAT = 111_320.0
         private const val MAX_RADIUS_METERS = 25_000
+        private const val CACHE_TTL_MS = 24 * 60 * 60 * 1000L   // 24 hours
+        private const val PREFS_CACHE = "osm_camera_cache"
     }
 }

@@ -79,6 +79,7 @@ class AlertMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AppLogger.init(this)
         settings = AppSettings(this)
         repository = AlertRepository(this)
         alertStore = AlertStore(this)
