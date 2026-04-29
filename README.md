@@ -1,8 +1,8 @@
-# Waze Alerts Notifier
+# Traffic Alerts Notifier
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.3` (`versionCode 13`).
+Current version: `0.9.5` (`versionCode 15`).
 
 ## What works
 
@@ -13,7 +13,7 @@ Current version: `0.9.3` (`versionCode 13`).
 - Optional TomTom Traffic API source for global traffic incidents when an API key is saved.
 - Foreground location service for background monitoring.
 - Android notification channels for monitoring and road alerts.
-- Android Auto support through both a POI template screen and a media-browser entry.
+- Android Auto support through media-template and media-browser entries.
 - Google Maps navigation notification detection for route-adjacent native alerts around the live device position.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
 - Reverse-geocoded alert addresses in the phone UI, phone notifications, and Android Auto.
@@ -61,7 +61,7 @@ Open the app, grant permissions, and enable background monitoring. On Android 11
 
 ## Android Auto
 
-The app declares an `androidx.car.app.category.POI` `CarAppService` for the template screen and an Android media browser service so the app can appear in Android Auto's media section. The media browser exposes the latest stored active alerts as playable items; selecting one opens the Waze deep link for that alert.
+The app declares an `androidx.car.app.category.MEDIA` `CarAppService` with Car App API level 8 and an Android media browser service so Android Auto treats road alerts as a media-side surface instead of opening the app as the large POI/template pane. The media browser exposes the latest stored active alerts as playable items; selecting one opens the Waze deep link for that alert.
 
 Google Maps route geometry is not exposed to third-party apps. When notification access is granted, `MapsNavigationListener` detects active Google Maps navigation notifications, starts monitoring if enabled, and `AlertMonitorService` posts native road-alert notifications around the live device position.
 
@@ -70,5 +70,5 @@ Google Maps route geometry is not exposed to third-party apps. When notification
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-WazeAlertsNotifier-debug-v0.8.0.apk
+TrafficAlertsNotifier-debug-v0.9.5.apk
 ```

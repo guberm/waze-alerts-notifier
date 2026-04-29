@@ -20,7 +20,7 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
     override fun onCreate() {
         super.onCreate()
         alertStore = AlertStore(this)
-        mediaSession = MediaSessionCompat(this, "WazeAlertsMedia").apply {
+        mediaSession = MediaSessionCompat(this, "TrafficAlertsMedia").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlayFromMediaId(mediaId: String, extras: Bundle?) {
                     openAlert(mediaId)

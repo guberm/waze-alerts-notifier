@@ -121,7 +121,7 @@ class OpenStreetMapCameraProvider(private val context: Context) : AlertProvider 
             readTimeout = 12_000
             requestMethod = "GET"
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "WazeAlertsNotifier/0.5 Android")
+            setRequestProperty("User-Agent", "TrafficAlertsNotifier/0.9 Android")
         }
 
         try {

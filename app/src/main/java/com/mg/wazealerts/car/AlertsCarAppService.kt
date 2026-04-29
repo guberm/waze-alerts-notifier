@@ -6,18 +6,24 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import androidx.car.app.CarAppService
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.Session
 import androidx.car.app.SessionInfo
+import androidx.car.app.media.MediaPlaybackManager
 import androidx.car.app.model.Action
-import androidx.car.app.model.ItemList
-import androidx.car.app.model.ListTemplate
+import androidx.car.app.model.Header
 import androidx.car.app.model.Row
+import androidx.car.app.model.RowSection
+import androidx.car.app.model.SectionedItemTemplate
 import androidx.car.app.model.Template
 import androidx.car.app.validation.HostValidator
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.mg.wazealerts.AppLogger
 import com.mg.wazealerts.model.RoadAlert
@@ -31,9 +37,43 @@ class AlertsCarAppService : CarAppService() {
         AppLogger.init(this)
         AppLogger.i("CarService", "onCreateSession display=${sessionInfo.displayType}")
         return object : Session() {
+            private val mediaSession = MediaSessionCompat(
+                this@AlertsCarAppService,
+                "TrafficAlertsTemplateMedia"
+            ).apply {
+                setPlaybackState(
+                    PlaybackStateCompat.Builder()
+                        .setActions(PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
+                        .setState(PlaybackStateCompat.STATE_STOPPED, 0L, 0f)
+                        .build()
+                )
+                isActive = true
+            }
+
+            init {
+                lifecycle.addObserver(
+                    LifecycleEventObserver { _, event ->
+                        when (event) {
+                            Lifecycle.Event.ON_CREATE -> registerMediaPlaybackToken(mediaSession.sessionToken)
+                            Lifecycle.Event.ON_DESTROY -> mediaSession.release()
+                            else -> Unit
+                        }
+                    }
+                )
+            }
+
             override fun onCreateScreen(intent: Intent): Screen {
                 AppLogger.i("CarService", "onCreateScreen apiLevel=${carContext.carAppApiLevel}")
                 return AlertsCarScreen(carContext)
+            }
+
+            private fun registerMediaPlaybackToken(token: MediaSessionCompat.Token) {
+                runCatching {
+                    (carContext.getCarService(CarContext.MEDIA_PLAYBACK_SERVICE) as MediaPlaybackManager)
+                        .registerMediaPlaybackToken(token)
+                }.onFailure {
+                    AppLogger.e("CarService", "registerMediaPlaybackToken failed: ${it.message}")
+                }
             }
         }
     }
@@ -107,21 +147,21 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
     }
 
     private fun buildTemplate(): Template {
-        val listBuilder = ItemList.Builder()
+        val sectionBuilder = RowSection.Builder().setTitle("Nearby")
         when {
             !settings.monitoringEnabled ->
-                listBuilder.addItem(
+                sectionBuilder.addItem(
                     Row.Builder().setTitle("Monitoring is off")
                         .addText("Enable in phone app settings").build()
                 )
             alerts.isEmpty() ->
-                listBuilder.addItem(
+                sectionBuilder.addItem(
                     Row.Builder().setTitle("No alerts nearby")
                         .addText("Within ${settings.radiusMeters} m").build()
                 )
             else ->
                 alerts.take(6).forEach { alert ->
-                    listBuilder.addItem(
+                    sectionBuilder.addItem(
                         Row.Builder()
                             .setTitle(alert.title)
                             .addText(alert.address ?: "%.5f, %.5f".format(alert.latitude, alert.longitude))
@@ -131,21 +171,20 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
                     )
                 }
         }
-        return ListTemplate.Builder()
-            .setTitle("Road alerts")
-            .setHeaderAction(Action.APP_ICON)
-            .setSingleList(listBuilder.build())
+        return SectionedItemTemplate.Builder()
+            .setHeader(Header.Builder().setTitle("Road alerts").setStartHeaderAction(Action.APP_ICON).build())
+            .addSection(sectionBuilder.build())
             .setLoading(false)
             .build()
     }
 
     private fun fallbackTemplate(msg: String?): Template =
-        ListTemplate.Builder()
-            .setTitle("Road alerts")
-            .setHeaderAction(Action.APP_ICON)
-            .setSingleList(
-                ItemList.Builder()
-                    .addItem(Row.Builder().setTitle("Error").addText(msg ?: "Unknown error").build())
+        SectionedItemTemplate.Builder()
+            .setHeader(Header.Builder().setTitle("Road alerts").setStartHeaderAction(Action.APP_ICON).build())
+            .addSection(
+                RowSection.Builder()
+                    .setTitle("Status")
+                        .addItem(Row.Builder().setTitle("Error").addText(msg ?: "Unknown error").build())
                     .build()
             )
             .setLoading(false)

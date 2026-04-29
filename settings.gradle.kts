@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "WazeAlertsNotifier"
+rootProject.name = "TrafficAlertsNotifier"
 include(":app")

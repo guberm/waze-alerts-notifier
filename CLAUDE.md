@@ -1,11 +1,11 @@
 # CLAUDE.md
 
-This repository is an Android/Kotlin prototype for a Waze-adjacent road alert notifier.
+This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Waze-adjacent road alert notifier.
 
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.4` / `versionCode 14`
+- Current app version: `0.9.5` / `versionCode 15`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -17,8 +17,8 @@ This repository is an Android/Kotlin prototype for a Waze-adjacent road alert no
 - `ThemeMode` and `UiPalette` provide System, Light, and Dark rendering for the View-based UI.
 - The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
-- `AlertsCarAppService` exposes an Android Auto POI template screen. `minCarApiLevel=6` enables Coolwalk-native side panel (~1/3 screen); the media strip automatically shares that same panel when music is playing.
-- `AlertsMediaBrowserService` exposes the latest stored active alerts through Android Auto's media browser surface.
+- `AlertsCarAppService` exposes Android Auto alerts as an `androidx.car.app.category.MEDIA` template surface with `minCarApiLevel=8`, so the host can place it in the media-side panel instead of the large POI/template pane.
+- `AlertsMediaBrowserService` exposes the latest stored active alerts through Android Auto's media browser surface. Android Auto still owns the final split-screen sizing and whether a separate media player shares that panel.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.
 - `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.

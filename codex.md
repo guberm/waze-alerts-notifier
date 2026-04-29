@@ -1,6 +1,6 @@
 # codex.md
 
-Codex should treat this repo as a small Android/Kotlin app with release artifacts published manually through GitHub releases.
+Codex should treat this repo as Traffic Alerts Notifier, a small Android/Kotlin app with release artifacts published manually through GitHub releases.
 
 ## Build Commands
 
@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.4` / `versionCode 14`.
+Current Android version: `0.9.5` / `versionCode 15`.
 
 ## GitHub Workflow
 
@@ -36,6 +36,6 @@ Current Android version: `0.9.4` / `versionCode 14`.
 - `TomTomTrafficAlertProvider` is the keyed global traffic provider for incidents, roadwork, jams, and hazards.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
-- Android Auto support has two surfaces: `AlertsCarAppService` as an `androidx.car.app.category.POI` template app, and `AlertsMediaBrowserService` as the media-section browser service.
-- `AlertsCarAppService` declares `minCarApiLevel=6` so Android Auto Coolwalk renders it as a native side panel (~1/3 of screen). The media strip automatically shares that panel when music is playing. Dropping below level 6 reverts to the full-screen compatibility mode.
+- Android Auto support has two media-side surfaces: `AlertsCarAppService` as an `androidx.car.app.category.MEDIA` template app, and `AlertsMediaBrowserService` as the media-section browser service.
+- `AlertsCarAppService` declares `minCarApiLevel=8` and uses a media-compatible template path so Android Auto can place alerts in the media-side panel instead of opening them as the large POI/template pane. Android Auto and the head unit still decide the exact split sizing and whether a separate media player shares that panel.
 - Google Maps navigation detection is notification-listener based. The app cannot read Google Maps route geometry, so route alerts are approximated by monitoring live device position while Maps navigation is active.

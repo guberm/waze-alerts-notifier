@@ -136,7 +136,7 @@ class LogActivity : Activity() {
 
     private fun copyToClipboard() {
         val cm = getSystemService(ClipboardManager::class.java)
-        cm.setPrimaryClip(ClipData.newPlainText("Waze Alerts Log", AppLogger.formatted()))
+        cm.setPrimaryClip(ClipData.newPlainText("Traffic Alerts Log", AppLogger.formatted()))
         Toast.makeText(this, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
     }
 

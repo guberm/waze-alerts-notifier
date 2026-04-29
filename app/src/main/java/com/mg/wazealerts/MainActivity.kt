@@ -138,7 +138,7 @@ class MainActivity : Activity() {
         }
         row.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text("Waze Alerts", 24f, palette.title, bold = true))
+            addView(text("Traffic Alerts", 24f, palette.title, bold = true))
             addView(text("Nearby road intelligence", 13f, palette.secondary))
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
