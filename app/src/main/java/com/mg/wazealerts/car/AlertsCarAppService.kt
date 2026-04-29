@@ -32,7 +32,7 @@ class AlertsCarAppService : CarAppService() {
         AppLogger.i("CarService", "onCreateSession display=${sessionInfo.displayType}")
         return object : Session() {
             override fun onCreateScreen(intent: Intent): Screen {
-                AppLogger.i("CarService", "onCreateScreen")
+                AppLogger.i("CarService", "onCreateScreen apiLevel=${carContext.carAppApiLevel}")
                 return AlertsCarScreen(carContext)
             }
         }
