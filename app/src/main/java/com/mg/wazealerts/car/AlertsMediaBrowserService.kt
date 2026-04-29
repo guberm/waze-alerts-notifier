@@ -35,9 +35,11 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
             isActive = true
         }
         sessionToken = mediaSession.sessionToken
+        sharedToken = mediaSession.sessionToken
     }
 
     override fun onDestroy() {
+        sharedToken = null
         mediaSession.release()
         super.onDestroy()
     }
@@ -108,5 +110,9 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
         private const val EMPTY_ID = "road_alerts_empty"
         private const val ALERT_ID_PREFIX = "road_alert:"
         private const val MAX_MEDIA_ALERTS = 12
+
+        /** Shared for MediaPlaybackManager registration in AlertsCarAppService. */
+        @Volatile
+        var sharedToken: MediaSessionCompat.Token? = null
     }
 }
