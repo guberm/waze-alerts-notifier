@@ -37,7 +37,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
 import androidx.car.app.notification.CarAppExtender
+import androidx.car.app.notification.CarNotificationManager
 import com.mg.wazealerts.AppLogger
+import java.util.Locale
 
 class AlertMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -69,6 +71,7 @@ class AlertMonitorService : Service() {
                     settings.currentLocationAddress = ""
                     settings.navDestination = ""
                     prevDistances.clear()
+                    cancelAlertNotifications()
                     AppLogger.i(TAG, "Navigation ended — cleared passed alerts")
                 }
             }
@@ -150,7 +153,7 @@ class AlertMonitorService : Service() {
 
             val liveAlerts = updateStoredAlertDistances(location)
             if (!shouldRefreshAlerts()) {
-                notifyNewAlerts(liveAlerts)
+                syncAlertNotifications(liveAlerts, location)
                 geocodeCurrentPosition(location)
                 return@launch
             }
@@ -173,7 +176,7 @@ class AlertMonitorService : Service() {
             broadcastVisibleAlerts(visible, force = true)
             geocodeCurrentPosition(location)
 
-            notifyNewAlerts(visible)
+            syncAlertNotifications(visible, location)
         }
     }
 
@@ -282,17 +285,33 @@ class AlertMonitorService : Service() {
         prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
     }
 
-    private fun notifyNewAlerts(alerts: List<RoadAlert>) {
-        if (!settings.notificationsEnabled || !isMapsNavigating) return
+    private fun syncAlertNotifications(alerts: List<RoadAlert>, location: Location) {
+        if (!settings.notificationsEnabled || !isMapsNavigating) {
+            cancelAlertNotifications()
+            return
+        }
 
         val passed = alertStore.passedAlertIds()
-        alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) || it.id in passed }.forEach { alert ->
-            notifiedIds += alert.id
-            showAlert(alert)
-            AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
+        val current = alerts
+            .filterNot { alertStore.isMuted(it.id) || it.id in passed }
+            .take(MAX_VISIBLE_CAR_NOTIFICATIONS)
+        val currentIds = current.map { it.id }.toSet()
+        notifiedIds.filterNot { it in currentIds }.toList().forEach { id ->
+            cancelAlertNotification(id)
+            notifiedIds.remove(id)
+        }
+
+        current.forEach { alert ->
+            val isNew = notifiedIds.add(alert.id)
+            showAlert(alert, location)
+            if (isNew) {
+                AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
+            }
         }
         while (notifiedIds.size > MAX_NOTIFIED_IDS) {
-            notifiedIds.remove(notifiedIds.first())
+            val id = notifiedIds.first()
+            cancelAlertNotification(id)
+            notifiedIds.remove(id)
         }
     }
 
@@ -338,23 +357,40 @@ class AlertMonitorService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-    private fun showAlert(alert: RoadAlert) {
+    private fun showAlert(alert: RoadAlert, location: Location) {
+        val directionLine = directionDistanceLine(alert, location)
+        val title = "$directionLine - ${alert.title}"
+        val text = alert.addressLine()
         val carAppExtender = CarAppExtender.Builder()
             .setImportance(NotificationManager.IMPORTANCE_HIGH)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setContentIntent(wazeIntent(alert))
             .build()
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(alert.title)
-            .setContentText(alert.addressLine())
-            .setStyle(NotificationCompat.BigTextStyle().bigText("${alert.addressLine()}\n${alert.description}"))
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$directionLine\n$text\n${alert.description}"))
             .setContentIntent(wazeIntent(alert))
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .extend(carAppExtender)
-            .build()
-        getSystemService(NotificationManager::class.java).notify(alert.id.hashCode(), notification)
+        CarNotificationManager.from(this).notify(alert.id.hashCode(), builder)
+    }
+
+    private fun cancelAlertNotifications() {
+        notifiedIds.toList().forEach { cancelAlertNotification(it) }
+        notifiedIds.clear()
+    }
+
+    private fun cancelAlertNotification(alertId: String) {
+        val notificationId = alertId.hashCode()
+        runCatching { CarNotificationManager.from(this).cancel(notificationId) }
+        getSystemService(NotificationManager::class.java).cancel(notificationId)
     }
 
     private fun createChannels() {
@@ -393,7 +429,58 @@ class AlertMonitorService : Service() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     private fun RoadAlert.addressLine(): String =
-        address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(java.util.Locale.US, latitude, longitude)
+        address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(Locale.US, latitude, longitude)
+
+    private fun directionDistanceLine(alert: RoadAlert, location: Location): String {
+        val target = Location("").apply {
+            latitude = alert.latitude
+            longitude = alert.longitude
+        }
+        val distance = location.distanceTo(target)
+        val bearingToAlert = location.bearingTo(target)
+        val heading = if (location.hasBearing()) location.bearing else settings.lastBearingDegrees
+        return if (heading >= 0f) {
+            val relative = normalizeDegrees(bearingToAlert - heading)
+            "${relativeArrow(relative)} ${relativeLabel(relative)} ${formatDistance(distance)}"
+        } else {
+            "${compassArrow(bearingToAlert)} ${compassLabel(bearingToAlert)} ${formatDistance(distance)}"
+        }
+    }
+
+    private fun normalizeDegrees(degrees: Float): Float = (degrees + 360f) % 360f
+
+    private fun relativeArrow(degrees: Float): String = when {
+        degrees < 22.5f || degrees >= 337.5f -> "↑"
+        degrees < 67.5f -> "↗"
+        degrees < 112.5f -> "→"
+        degrees < 157.5f -> "↘"
+        degrees < 202.5f -> "↓"
+        degrees < 247.5f -> "↙"
+        degrees < 292.5f -> "←"
+        else -> "↖"
+    }
+
+    private fun relativeLabel(degrees: Float): String = when {
+        degrees < 22.5f || degrees >= 337.5f -> "ahead"
+        degrees < 67.5f -> "front right"
+        degrees < 112.5f -> "right"
+        degrees < 157.5f -> "back right"
+        degrees < 202.5f -> "behind"
+        degrees < 247.5f -> "back left"
+        degrees < 292.5f -> "left"
+        else -> "front left"
+    }
+
+    private fun compassArrow(degrees: Float): String = relativeArrow(normalizeDegrees(degrees))
+
+    private fun compassLabel(degrees: Float): String {
+        val labels = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+        val index = ((normalizeDegrees(degrees) + 22.5f) / 45f).toInt() % labels.size
+        return labels[index]
+    }
+
+    private fun formatDistance(meters: Float): String =
+        if (meters >= 1000f) "%.1f km".format(Locale.US, meters / 1000f) else "${meters.toInt()} m"
 
     companion object {
         private const val TAG = "AlertMonitor"
@@ -406,6 +493,7 @@ class AlertMonitorService : Service() {
         private const val PASSED_DISTANCE_DELTA_METERS = 250f
         private const val PASSED_BEARING_DIFF_DEGREES = 100f
         private const val MAX_NOTIFIED_IDS = 100
+        private const val MAX_VISIBLE_CAR_NOTIFICATIONS = 3
         private const val MAX_CACHED_ALERTS = 200
         private const val DISTANCE_UI_BUCKET_METERS = 100f
         private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 12_000L

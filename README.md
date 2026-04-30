@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.9` (`versionCode 19`).
+Current version: `0.9.10` (`versionCode 20`).
 
 ## What works
 
@@ -13,13 +13,14 @@ Current version: `0.9.9` (`versionCode 19`).
 - Optional TomTom Traffic API source for global traffic incidents when an API key is saved.
 - Foreground location service for background monitoring.
 - Android notification channels for monitoring and road alerts.
-- Android Auto support through the media-browser entry, so alerts stay in the media-side surface.
+- Android Auto support through dynamic car notifications instead of a media-player or template app surface.
 - Google Maps navigation notification detection for route-adjacent native alerts around the live device position.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
 - Reverse-geocoded alert addresses in the phone UI, phone notifications, and Android Auto.
 - Wide movement cache: while monitoring, the app fetches a larger alert area and only displays currently relevant alerts inside the selected radius.
 - Movement cache controls in Settings for cache time, min/max cache radius, radius expansion, and visible alert limit.
-- Direction + live distance chips in the phone UI and Android Auto media list rows.
+- Direction + live distance chips in the phone UI and dynamic Android Auto alert notifications.
+- Phone dashboard keeps the screen awake while it is open.
 - Throttled live movement updates so distance changes stay current without constantly repainting the screen.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Appearance setting with System, Light, and Dark modes.
@@ -65,13 +66,13 @@ Open the app, grant permissions, and enable background monitoring. On Android 11
 
 ## Android Auto
 
-The app declares an Android media browser service with media-playback foreground metadata so Android Auto treats road alerts as a media-side surface instead of opening the app as the large template pane. The media browser exposes the latest stored active alerts as playable items with live distance and direction; selecting one opens the Waze deep link for that alert.
+The app does not expose an Android Auto launcher, template, or media-player surface. It uses car-compatible alert notifications so Google Maps or Waze can remain the primary Android Auto screen.
 
-The media session stays active in a paused state and publishes nearest-alert metadata, which matches the Android Auto media-app pattern used by production apps while keeping alert selection manual.
+Each active road-alert notification is updated from live location data with the current arrow, relative direction, and distance. Tapping an alert opens the Waze deep link for that alert.
 
-Android Auto and the head unit still own final split-screen sizing, but the app no longer registers a template `CarAppService` entry that can be promoted into the larger template pane.
+Android Auto and the head unit own final notification presentation. The app intentionally avoids `MediaBrowserService`, `MediaSession`, and `CarAppService` entries because opening those surfaces can promote the app into a large split-screen pane.
 
-The APK no longer contains the fallback `CarAppService` class, leaving only the media browser service as the Android Auto entrypoint.
+The APK no longer contains Android Auto media-browser metadata or the fallback `CarAppService` class.
 
 Google Maps route geometry is not exposed to third-party apps. When notification access is granted, `MapsNavigationListener` detects active Google Maps navigation notifications, starts monitoring if enabled, and `AlertMonitorService` posts native road-alert notifications around the live device position.
 
@@ -82,5 +83,5 @@ During movement, remote providers are queried with a wider cache radius than the
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-TrafficAlertsNotifier-debug-v0.9.9.apk
+TrafficAlertsNotifier-debug-v0.9.10.apk
 ```

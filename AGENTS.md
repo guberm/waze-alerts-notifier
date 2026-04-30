@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [Waze Alerts Notifier] recent context, 2026-04-30 4:13pm EDT
+# [Waze Alerts Notifier] recent context, 2026-04-30 5:41pm EDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 7 obs (2,299t read) | 459,338t work | 99% savings
+Stats: 12 obs (4,401t read) | 713,054t work | 99% savings
 
 ### Apr 30, 2026
 1943 1:57p 🔴 Direction arrow missing in phone UI alert chips
@@ -17,6 +17,13 @@ Stats: 7 obs (2,299t read) | 459,338t work | 99% savings
 1947 " ✅ Released Waze Alerts Notifier v0.9.8 to GitHub
 1956 " 🔵 Pocket Casts Android Auto reference: foregroundServiceType and media metadata are required
 1957 " 🔴 Android Auto 66% screen fix: foregroundServiceType + media metadata + PAUSED state
+1965 " 🔵 Android Auto v0.9.9 fix confirmed ineffective — still 66% and now shows as player
+1966 5:29p 🔵 AlertsMediaBrowserService.kt v0.9.9 full implementation confirmed via source read
+1967 " 🔵 New Claude session replayed the entire v0.9.9 release flow after context compaction
+1968 5:30p 🔵 automotive_app_desc.xml declares media use — root cause candidate for Android Auto player classification
+1969 " 🔵 AlertMonitorService.kt v0.9.9 full implementation confirmed — broadcast throttle constants
+1970 5:44p 🔴 Android Auto corrected to notification-only dynamic alerts; media player surface removed
+1971 " ✅ Phone dashboard now keeps screen awake while open
 
-Access 459k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 713k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

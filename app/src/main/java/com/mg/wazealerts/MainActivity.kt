@@ -9,6 +9,7 @@ import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -63,6 +64,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         settings = AppSettings(this)
         palette = UiPalette.from(this, settings.themeMode)
@@ -81,7 +83,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Android Auto media integration\n• Google Maps navigation detection\n• Native notifications along the route\n• New radius slider steps\n• Live refresh timer\n• Background sync fixes")
+                .setMessage("• Android Auto alert notifications with live distance and direction\n• Google Maps navigation detection\n• Native notifications along the route\n• New radius slider steps\n• Live refresh timer\n• Background sync fixes")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }
@@ -106,6 +108,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         countdownTimer?.cancel()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scope.cancel()
         super.onDestroy()
     }
