@@ -152,19 +152,25 @@ class AlertMonitorService : Service() {
                 return@launch
             }
 
-            val alerts = repository.nearby(location)
+            val cacheRadius = cacheRadiusMeters()
+            val fetched = repository.nearby(location, cacheRadius)
                 .map { it.withDistanceFrom(location) }
                 .sortedBy { it.distanceMeters }
-            AppLogger.i(TAG, "Fetched ${alerts.size} alerts (radius=${settings.radiusMeters}m)")
+            AppLogger.i(TAG, "Fetched ${fetched.size} cache alerts (radius=${cacheRadius}m, visibleRadius=${settings.radiusMeters}m)")
 
             lastAlertRefreshAtMillis = System.currentTimeMillis()
-            updatePassedAlerts(alerts, location)
+            val cached = mergeCachedAlerts(fetched, alertStore.cachedAlerts(alertCacheTtlMillis()), location)
+            val visible = visibleAlerts(cached, location)
+            updatePassedAlerts(visible, location)
 
-            alertStore.saveActiveAlerts(alerts)
+            if (cached.isNotEmpty()) {
+                alertStore.saveCachedAlerts(cached, updateFetchedAt = fetched.isNotEmpty())
+            }
+            alertStore.saveActiveAlerts(visible)
             sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
             geocodeCurrentPosition(location)
 
-            notifyNewAlerts(alerts)
+            notifyNewAlerts(visible)
         }
     }
 
@@ -174,15 +180,58 @@ class AlertMonitorService : Service() {
     }
 
     private fun updateStoredAlertDistances(location: Location): List<RoadAlert> {
-        val current = alertStore.activeAlerts()
-        if (current.isEmpty()) return emptyList()
+        val cached = alertStore.cachedAlerts(alertCacheTtlMillis())
+        val current = if (cached.isNotEmpty()) cached else alertStore.activeAlerts()
+        if (current.isEmpty()) {
+            alertStore.saveActiveAlerts(emptyList())
+            return emptyList()
+        }
 
-        val updated = current.map { it.withDistanceFrom(location) }.sortedBy { it.distanceMeters }
-        updatePassedAlerts(updated, location)
-        alertStore.saveActiveAlerts(updated)
+        val updatedCache = current.map { it.withDistanceFrom(location) }.sortedBy { it.distanceMeters }
+        val visible = visibleAlerts(updatedCache, location)
+        updatePassedAlerts(visible, location)
+        if (cached.isNotEmpty()) {
+            alertStore.saveCachedAlerts(updatedCache.take(MAX_CACHED_ALERTS), updateFetchedAt = false)
+        }
+        alertStore.saveActiveAlerts(visible)
         sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
-        return updated
+        return visible
     }
+
+    private fun mergeCachedAlerts(
+        fetched: List<RoadAlert>,
+        existing: List<RoadAlert>,
+        location: Location
+    ): List<RoadAlert> {
+        val byId = linkedMapOf<String, RoadAlert>()
+        existing.forEach { alert ->
+            val updated = alert.withDistanceFrom(location)
+            if (updated.distanceMeters <= cacheRadiusMeters()) {
+                byId[updated.id] = updated
+            }
+        }
+        fetched.forEach { byId[it.id] = it.withDistanceFrom(location) }
+        return byId.values
+            .sortedBy { it.distanceMeters }
+            .take(MAX_CACHED_ALERTS)
+    }
+
+    private fun visibleAlerts(alerts: List<RoadAlert>, location: Location): List<RoadAlert> {
+        val passed = alertStore.passedAlertIds()
+        return alerts
+            .map { it.withDistanceFrom(location) }
+            .filter { it.distanceMeters <= settings.radiusMeters }
+            .filterNot { it.id in passed }
+            .sortedBy { it.distanceMeters }
+            .take(settings.maxVisibleAlerts)
+    }
+
+    private fun cacheRadiusMeters(): Int =
+        maxOf(settings.radiusMeters * settings.cacheRadiusMultiplier, settings.cacheMinRadiusMeters)
+            .coerceAtMost(settings.cacheMaxRadiusMeters)
+
+    private fun alertCacheTtlMillis(): Long =
+        settings.alertCacheTtlMinutes * 60_000L
 
     private fun updatePassedAlerts(alerts: List<RoadAlert>, location: Location) {
         if (!isMapsNavigating || settings.lastBearingDegrees < 0f) {
@@ -334,5 +383,6 @@ class AlertMonitorService : Service() {
         private const val PASSED_DISTANCE_DELTA_METERS = 250f
         private const val PASSED_BEARING_DIFF_DEGREES = 100f
         private const val MAX_NOTIFIED_IDS = 100
+        private const val MAX_CACHED_ALERTS = 200
     }
 }

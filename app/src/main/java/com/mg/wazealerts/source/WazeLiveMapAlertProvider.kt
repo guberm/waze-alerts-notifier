@@ -13,11 +13,11 @@ import java.util.Locale
 import kotlin.math.cos
 
 class WazeLiveMapAlertProvider : AlertProvider {
-    override suspend fun alertsNear(location: Location, settings: AppSettings): List<RoadAlert> {
+    override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.wazeLiveMapEnabled) return emptyList()
 
         return runCatching {
-            val bbox = boundingBox(location.latitude, location.longitude, settings.radiusMeters)
+            val bbox = boundingBox(location.latitude, location.longitude, radiusMeters)
             val url = URL(
                 "https://www.waze.com/live-map/api/georss" +
                     "?top=${bbox.top}" +
@@ -27,7 +27,7 @@ class WazeLiveMapAlertProvider : AlertProvider {
                     "&env=${environmentFor(location.latitude, location.longitude)}" +
                     "&types=alerts"
             )
-            fetch(url).toAlerts(location, settings.radiusMeters)
+            fetch(url).toAlerts(location, radiusMeters)
         }.getOrElse {
             emptyList()
         }

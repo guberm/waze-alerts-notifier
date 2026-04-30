@@ -13,12 +13,12 @@ import java.util.Locale
 import kotlin.math.cos
 
 class TomTomTrafficAlertProvider : AlertProvider {
-    override suspend fun alertsNear(location: Location, settings: AppSettings): List<RoadAlert> {
+    override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         val key = settings.tomTomApiKey
         if (key.isBlank()) return emptyList()
 
         return runCatching {
-            val bbox = boundingBox(location.latitude, location.longitude, settings.radiusMeters)
+            val bbox = boundingBox(location.latitude, location.longitude, radiusMeters)
             val fields = "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,events{description,code,iconCategory},startTime,endTime,from,to,roadNumbers,lastReportTime}}}"
             val url = URL(
                 "https://api.tomtom.com/traffic/services/5/incidentDetails" +
@@ -28,7 +28,7 @@ class TomTomTrafficAlertProvider : AlertProvider {
                     "&language=en-US" +
                     "&timeValidityFilter=present"
             )
-            fetch(url).toAlerts(location, settings.radiusMeters)
+            fetch(url).toAlerts(location, radiusMeters)
         }.getOrElse {
             emptyList()
         }

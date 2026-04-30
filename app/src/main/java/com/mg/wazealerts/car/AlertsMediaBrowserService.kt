@@ -50,12 +50,10 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
             isActive = true
         }
         sessionToken = mediaSession.sessionToken
-        sharedToken = mediaSession.sessionToken
     }
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(updateReceiver) }
-        sharedToken = null
         mediaSession.release()
         super.onDestroy()
     }
@@ -86,11 +84,12 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
     }
 
     private fun RoadAlert.toMediaItem(): MediaBrowserCompat.MediaItem {
+        val direction = directionDistanceLine(this)
         val description = MediaDescriptionCompat.Builder()
             .setMediaId("$ALERT_ID_PREFIX${Uri.encode(id)}")
-            .setTitle(title)
+            .setTitle("$direction · $title")
             .setSubtitle(addressLine())
-            .setDescription(directionDistanceLine(this))
+            .setDescription(description)
             .setIconUri(resourceUri())
             .build()
         return MediaBrowserCompat.MediaItem(description, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
@@ -198,8 +197,5 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
         private const val ALERT_ID_PREFIX = "road_alert:"
         private const val MAX_MEDIA_ALERTS = 12
 
-        /** Shared for MediaPlaybackManager registration in AlertsCarAppService. */
-        @Volatile
-        var sharedToken: MediaSessionCompat.Token? = null
     }
 }

@@ -16,14 +16,14 @@ import java.util.Locale
 import kotlin.math.cos
 
 class OpenStreetMapCameraProvider(private val context: Context) : AlertProvider {
-    override suspend fun alertsNear(location: Location, settings: AppSettings): List<RoadAlert> {
+    override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.osmCamerasEnabled) return emptyList()
 
         val cellKey = cellKey(location.latitude, location.longitude)
         val cached = loadCache(cellKey)
         if (cached != null) {
             AppLogger.d("OSM", "Cache hit for cell $cellKey — ${cached.size} cameras")
-            return filterByRadius(cached, location, settings.radiusMeters)
+            return filterByRadius(cached, location, radiusMeters)
         }
 
         AppLogger.i("OSM", "Cache miss for cell $cellKey — fetching Overpass")
@@ -35,7 +35,7 @@ class OpenStreetMapCameraProvider(private val context: Context) : AlertProvider 
             val allCameras = body.toAlerts(location, MAX_RADIUS_METERS)
             saveCache(cellKey, allCameras)
             AppLogger.i("OSM", "Cached ${allCameras.size} cameras for cell $cellKey")
-            filterByRadius(allCameras, location, settings.radiusMeters)
+            filterByRadius(allCameras, location, radiusMeters)
         }.getOrElse {
             AppLogger.w("OSM", "Overpass fetch failed: ${it.message}")
             emptyList()

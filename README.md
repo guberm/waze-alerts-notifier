@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.7` (`versionCode 17`).
+Current version: `0.9.8` (`versionCode 18`).
 
 ## What works
 
@@ -17,6 +17,9 @@ Current version: `0.9.7` (`versionCode 17`).
 - Google Maps navigation notification detection for route-adjacent native alerts around the live device position.
 - Waze Deep Link on alert notifications: tapping an alert opens Waze or Waze Live Map at that alert location.
 - Reverse-geocoded alert addresses in the phone UI, phone notifications, and Android Auto.
+- Wide movement cache: while monitoring, the app fetches a larger alert area and only displays currently relevant alerts inside the selected radius.
+- Movement cache controls in Settings for cache time, min/max cache radius, radius expansion, and visible alert limit.
+- Direction + live distance chips in the phone UI and Android Auto media list rows.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Appearance setting with System, Light, and Dark modes.
 - Compact modern UI with status chips, grouped controls, and alert cards.
@@ -65,12 +68,16 @@ The app declares an Android media browser service so Android Auto treats road al
 
 Android Auto and the head unit still own final split-screen sizing, but the app no longer registers a template `CarAppService` entry that can be promoted into the larger template pane.
 
+The APK no longer contains the fallback `CarAppService` class, leaving only the media browser service as the Android Auto entrypoint.
+
 Google Maps route geometry is not exposed to third-party apps. When notification access is granted, `MapsNavigationListener` detects active Google Maps navigation notifications, starts monitoring if enabled, and `AlertMonitorService` posts native road-alert notifications around the live device position.
+
+During movement, remote providers are queried with a wider cache radius than the visible radius. Cached alerts live briefly and are re-filtered on every location update, so Android Auto and the phone UI show only current in-radius alerts while the app keeps nearby upcoming alerts ready without another network refresh.
 
 ## Release
 
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-TrafficAlertsNotifier-debug-v0.9.7.apk
+TrafficAlertsNotifier-debug-v0.9.8.apk
 ```

@@ -7,7 +7,7 @@ import com.mg.wazealerts.settings.AppSettings
 import kotlin.math.cos
 
 class DemoAlertProvider : AlertProvider {
-    override suspend fun alertsNear(location: Location, settings: AppSettings): List<RoadAlert> {
+    override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.demoAlertsEnabled) return emptyList()
 
         val enabled = settings.enabledKinds()
@@ -15,12 +15,12 @@ class DemoAlertProvider : AlertProvider {
         return AlertKind.entries.mapIndexedNotNull { index, kind ->
             if (kind !in enabled) return@mapIndexedNotNull null
 
-            val distance = ((index + 1) * settings.radiusMeters / 8).coerceAtLeast(120)
+            val distance = ((index + 1) * radiusMeters / 8).coerceAtLeast(120)
             val bearingDegrees = 30.0 + index * 47.0
             val point = offset(location.latitude, location.longitude, distance.toDouble(), bearingDegrees)
             val check = FloatArray(1)
             Location.distanceBetween(location.latitude, location.longitude, point.first, point.second, check)
-            if (check[0] > settings.radiusMeters) return@mapIndexedNotNull null
+            if (check[0] > radiusMeters) return@mapIndexedNotNull null
 
             RoadAlert(
                 id = "${kind.name}-${location.latitude.round4()}-${location.longitude.round4()}",

@@ -41,6 +41,26 @@ class AppSettings(context: Context) {
         get() = prefs.getLong(KEY_POLL_INTERVAL, 60_000L)
         set(value) = prefs.edit().putLong(KEY_POLL_INTERVAL, value.coerceIn(30_000L, 300_000L)).apply()
 
+    var alertCacheTtlMinutes: Int
+        get() = prefs.getInt(KEY_ALERT_CACHE_TTL_MINUTES, 20)
+        set(value) = prefs.edit().putInt(KEY_ALERT_CACHE_TTL_MINUTES, value.coerceIn(5, 120)).apply()
+
+    var cacheMinRadiusMeters: Int
+        get() = prefs.getInt(KEY_CACHE_MIN_RADIUS_METERS, 15_000)
+        set(value) = prefs.edit().putInt(KEY_CACHE_MIN_RADIUS_METERS, value.coerceIn(3_000, 50_000)).apply()
+
+    var cacheMaxRadiusMeters: Int
+        get() = prefs.getInt(KEY_CACHE_MAX_RADIUS_METERS, 50_000)
+        set(value) = prefs.edit().putInt(KEY_CACHE_MAX_RADIUS_METERS, value.coerceIn(5_000, 100_000)).apply()
+
+    var cacheRadiusMultiplier: Int
+        get() = prefs.getInt(KEY_CACHE_RADIUS_MULTIPLIER, 5)
+        set(value) = prefs.edit().putInt(KEY_CACHE_RADIUS_MULTIPLIER, value.coerceIn(1, 10)).apply()
+
+    var maxVisibleAlerts: Int
+        get() = prefs.getInt(KEY_MAX_VISIBLE_ALERTS, 24)
+        set(value) = prefs.edit().putInt(KEY_MAX_VISIBLE_ALERTS, value.coerceIn(6, 60)).apply()
+
     var lastVersionCode: Int
         get() = prefs.getInt(KEY_LAST_VERSION_CODE, 0)
         set(value) = prefs.edit().putInt(KEY_LAST_VERSION_CODE, value).apply()
@@ -115,6 +135,11 @@ class AppSettings(context: Context) {
         private const val KEY_TOMTOM_API_KEY = "tomtom_api_key"
         private const val KEY_RADIUS_METERS = "radius_meters"
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"
+        private const val KEY_ALERT_CACHE_TTL_MINUTES = "alert_cache_ttl_minutes"
+        private const val KEY_CACHE_MIN_RADIUS_METERS = "cache_min_radius_meters"
+        private const val KEY_CACHE_MAX_RADIUS_METERS = "cache_max_radius_meters"
+        private const val KEY_CACHE_RADIUS_MULTIPLIER = "cache_radius_multiplier"
+        private const val KEY_MAX_VISIBLE_ALERTS = "max_visible_alerts"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_LAST_VERSION_CODE = "last_version_code"
         private const val KEY_MAPS_NAVIGATION_ACTIVE = "maps_navigation_active"

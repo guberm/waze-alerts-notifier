@@ -16,6 +16,7 @@ import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
@@ -48,10 +49,10 @@ class SettingsActivity : Activity() {
         palette.applyWindow(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(palette.background)
+            background = backgroundGradient()
         }
         val scroll = ScrollView(this).apply {
-            setBackgroundColor(palette.background)
+            background = backgroundGradient()
             addView(root)
         }
         setContentView(scroll)
@@ -61,27 +62,34 @@ class SettingsActivity : Activity() {
         appearancePanel()
         sourcesPanel()
         behaviorPanel()
+        cachePanel()
         alertTypesPanel()
         permissionPanel()
     }
 
     private fun header() {
-        val row = LinearLayout(this).apply {
+        root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-        }
-        row.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(text("Settings", 24f, palette.title, bold = true))
-            addView(text("Preferences for monitoring and alerts", 13f, palette.secondary), blockParams(top = 3.dp))
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        row.addView(Button(this).apply {
-            text = "Done"
-            palette.styleButton(this, compact = true)
-            setOnClickListener { finish() }
-        })
-        root.addView(row)
+            setPadding(16.dp, 15.dp, 16.dp, 16.dp)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(palette.accent, if (palette.dark) 0xFF234A84.toInt() else 0xFF4CA6D8.toInt())
+            ).apply { cornerRadius = 8.dp.toFloat() }
+            addView(LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text("Settings", 24f, 0xFFFFFFFF.toInt(), bold = true))
+                addView(text("Monitoring and alert preferences", 13f, 0xDDEFFFFF.toInt()), blockParams(top = 3.dp))
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(Button(this@SettingsActivity).apply {
+                text = "Done"
+                palette.styleButton(this, compact = true)
+                setTextColor(0xFFFFFFFF.toInt())
+                background = rounded(0x24FFFFFF, 0x40FFFFFF)
+                setOnClickListener { finish() }
+            })
+        }, blockParams(bottom = 12.dp))
     }
 
     private fun appearancePanel() {
@@ -117,6 +125,59 @@ class SettingsActivity : Activity() {
             addSwitch("Notifications", settings.notificationsEnabled) {
                 settings.notificationsEnabled = it
             }
+        })
+    }
+
+    private fun cachePanel() {
+        root.addView(panel {
+            addView(sectionHeader("Movement Cache", "Fetch wider during drives, show only current alerts."))
+            addView(sliderRow(
+                label = "Cache time",
+                value = "${settings.alertCacheTtlMinutes} min",
+                max = CACHE_TTL_STEPS_MINUTES.size - 1,
+                progress = stepIndex(CACHE_TTL_STEPS_MINUTES, settings.alertCacheTtlMinutes),
+                onProgress = { settings.alertCacheTtlMinutes = CACHE_TTL_STEPS_MINUTES[it] },
+                valueText = { "${settings.alertCacheTtlMinutes} min" }
+            ))
+            addView(sliderRow(
+                label = "Minimum cache radius",
+                value = formatRadius(settings.cacheMinRadiusMeters),
+                max = CACHE_MIN_RADIUS_STEPS.size - 1,
+                progress = stepIndex(CACHE_MIN_RADIUS_STEPS, settings.cacheMinRadiusMeters),
+                onProgress = {
+                    settings.cacheMinRadiusMeters = CACHE_MIN_RADIUS_STEPS[it]
+                    if (settings.cacheMaxRadiusMeters < settings.cacheMinRadiusMeters) {
+                        settings.cacheMaxRadiusMeters = settings.cacheMinRadiusMeters
+                    }
+                },
+                valueText = { formatRadius(settings.cacheMinRadiusMeters) }
+            ))
+            addView(sliderRow(
+                label = "Maximum cache radius",
+                value = formatRadius(settings.cacheMaxRadiusMeters),
+                max = CACHE_MAX_RADIUS_STEPS.size - 1,
+                progress = stepIndex(CACHE_MAX_RADIUS_STEPS, settings.cacheMaxRadiusMeters),
+                onProgress = {
+                    settings.cacheMaxRadiusMeters = CACHE_MAX_RADIUS_STEPS[it].coerceAtLeast(settings.cacheMinRadiusMeters)
+                },
+                valueText = { formatRadius(settings.cacheMaxRadiusMeters) }
+            ))
+            addView(sliderRow(
+                label = "Radius expansion",
+                value = "${settings.cacheRadiusMultiplier}x",
+                max = CACHE_MULTIPLIER_STEPS.size - 1,
+                progress = stepIndex(CACHE_MULTIPLIER_STEPS, settings.cacheRadiusMultiplier),
+                onProgress = { settings.cacheRadiusMultiplier = CACHE_MULTIPLIER_STEPS[it] },
+                valueText = { "${settings.cacheRadiusMultiplier}x" }
+            ))
+            addView(sliderRow(
+                label = "Visible alert limit",
+                value = settings.maxVisibleAlerts.toString(),
+                max = VISIBLE_ALERT_STEPS.size - 1,
+                progress = stepIndex(VISIBLE_ALERT_STEPS, settings.maxVisibleAlerts),
+                onProgress = { settings.maxVisibleAlerts = VISIBLE_ALERT_STEPS[it] },
+                valueText = { settings.maxVisibleAlerts.toString() }
+            ))
         })
     }
 
@@ -210,6 +271,42 @@ class SettingsActivity : Activity() {
         })
     }
 
+    private fun sliderRow(
+        label: String,
+        value: String,
+        max: Int,
+        progress: Int,
+        onProgress: (Int) -> Unit,
+        valueText: () -> String
+    ): LinearLayout {
+        val valueView = text(value, 14f, palette.title, bold = true)
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 10.dp, 0, 0)
+            val row = LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            row.addView(text(label, 14f, palette.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(valueView)
+            addView(row)
+            addView(SeekBar(this@SettingsActivity).apply {
+                this.max = max
+                this.progress = progress
+                setPadding(0, 2.dp, 0, 0)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        onProgress(progress)
+                        valueView.text = valueText()
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                })
+            })
+        }
+    }
+
     private fun sectionHeader(title: String, subtitle: String): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -220,7 +317,7 @@ class SettingsActivity : Activity() {
     private fun panel(content: LinearLayout.() -> Unit): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(14.dp, 12.dp, 14.dp, 12.dp)
+            setPadding(15.dp, 13.dp, 15.dp, 14.dp)
             background = rounded(palette.panel, palette.border)
             content()
         }.also {
@@ -239,6 +336,12 @@ class SettingsActivity : Activity() {
             cornerRadius = 8.dp.toFloat()
             if (stroke != 0) setStroke(1.dp, stroke)
         }
+
+    private fun backgroundGradient(): GradientDrawable =
+        GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(palette.backgroundAlt, palette.background)
+        )
 
     private fun blockParams(top: Int = 0, bottom: Int = 0): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -278,4 +381,18 @@ class SettingsActivity : Activity() {
 
     private val Int.dp: Int
         get() = (this * resources.displayMetrics.density).toInt()
+
+    private fun stepIndex(steps: IntArray, value: Int): Int =
+        steps.indexOf(steps.minByOrNull { kotlin.math.abs(it - value) } ?: steps.first()).coerceAtLeast(0)
+
+    private fun formatRadius(meters: Int): String =
+        if (meters >= 1000) "${meters / 1000} km" else "$meters m"
+
+    companion object {
+        private val CACHE_TTL_STEPS_MINUTES = intArrayOf(5, 10, 20, 30, 60, 120)
+        private val CACHE_MIN_RADIUS_STEPS = intArrayOf(3_000, 5_000, 10_000, 15_000, 25_000, 50_000)
+        private val CACHE_MAX_RADIUS_STEPS = intArrayOf(5_000, 10_000, 15_000, 25_000, 50_000, 75_000, 100_000)
+        private val CACHE_MULTIPLIER_STEPS = intArrayOf(1, 2, 3, 5, 8, 10)
+        private val VISIBLE_ALERT_STEPS = intArrayOf(6, 12, 24, 36, 48, 60)
+    }
 }

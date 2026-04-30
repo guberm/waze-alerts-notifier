@@ -12,6 +12,7 @@ import androidx.core.view.WindowCompat
 data class UiPalette(
     val dark: Boolean,
     val background: Int,
+    val backgroundAlt: Int,
     val panel: Int,
     val surface: Int,
     val mutedSurface: Int,
@@ -23,6 +24,8 @@ data class UiPalette(
     val buttonText: Int,
     val accent: Int,
     val accentSoft: Int,
+    val success: Int,
+    val warning: Int,
     val danger: Int
 ) {
     fun applyWindow(activity: Activity) {
@@ -35,7 +38,7 @@ data class UiPalette(
     }
 
     fun styleButton(button: Button, selected: Boolean = false, compact: Boolean = false) {
-        val radius = (6 * button.resources.displayMetrics.density).toInt().toFloat()
+        val radius = (8 * button.resources.displayMetrics.density).toInt().toFloat()
         val horizontal = ((if (compact) 12 else 16) * button.resources.displayMetrics.density).toInt()
         val vertical = ((if (compact) 7 else 10) * button.resources.displayMetrics.density).toInt()
 
@@ -52,6 +55,7 @@ data class UiPalette(
         button.background = GradientDrawable().apply {
             setColor(if (selected) accent else buttonBackground)
             cornerRadius = radius
+            if (!selected) setStroke((1 * button.resources.displayMetrics.density).toInt(), border)
         }
     }
 
@@ -77,34 +81,40 @@ data class UiPalette(
                 UiPalette(
                     dark = true,
                     background = 0xFF101816.toInt(),
-                    panel = 0xFF121D1A.toInt(),
-                    surface = 0xFF17231F.toInt(),
-                    mutedSurface = 0xFF25302D.toInt(),
-                    border = 0xFF34504A.toInt(),
-                    title = 0xFFE7F4EF.toInt(),
-                    body = 0xFFC4D4CE.toInt(),
-                    secondary = 0xFF9CB1AA.toInt(),
-                    buttonBackground = 0xFF2A3834.toInt(),
+                    backgroundAlt = 0xFF162321.toInt(),
+                    panel = 0xFF14201D.toInt(),
+                    surface = 0xFF1A2925.toInt(),
+                    mutedSurface = 0xFF26322F.toInt(),
+                    border = 0xFF395650.toInt(),
+                    title = 0xFFF0FAF7.toInt(),
+                    body = 0xFFC7D8D2.toInt(),
+                    secondary = 0xFFA0B6AF.toInt(),
+                    buttonBackground = 0xFF22322E.toInt(),
                     buttonText = 0xFFE7F4EF.toInt(),
-                    accent = 0xFF147A68.toInt(),
-                    accentSoft = 0xFF193D36.toInt(),
+                    accent = 0xFF18A383.toInt(),
+                    accentSoft = 0xFF183F38.toInt(),
+                    success = 0xFF59C88B.toInt(),
+                    warning = 0xFFF1B84A.toInt(),
                     danger = 0xFFD77474.toInt()
                 )
             } else {
                 UiPalette(
                     dark = false,
-                    background = 0xFFFAFBFA.toInt(),
-                    panel = 0xFFF2F5F3.toInt(),
+                    background = 0xFFF8FAF9.toInt(),
+                    backgroundAlt = 0xFFEAF3F0.toInt(),
+                    panel = 0xFFFFFFFF.toInt(),
                     surface = 0xFFFFFFFF.toInt(),
-                    mutedSurface = 0xFFE8E8E8.toInt(),
-                    border = 0xFFD6DEDB.toInt(),
-                    title = 0xFF12332F.toInt(),
-                    body = 0xFF35433F.toInt(),
-                    secondary = 0xFF50615D.toInt(),
-                    buttonBackground = 0xFFD7DAD8.toInt(),
-                    buttonText = 0xFF1F2322.toInt(),
-                    accent = 0xFF147A68.toInt(),
-                    accentSoft = 0xFFE1F0EC.toInt(),
+                    mutedSurface = 0xFFF0F2F1.toInt(),
+                    border = 0xFFD5E1DD.toInt(),
+                    title = 0xFF102D2A.toInt(),
+                    body = 0xFF334641.toInt(),
+                    secondary = 0xFF647873.toInt(),
+                    buttonBackground = 0xFFF3F7F5.toInt(),
+                    buttonText = 0xFF172B28.toInt(),
+                    accent = 0xFF0F8F75.toInt(),
+                    accentSoft = 0xFFE0F4EF.toInt(),
+                    success = 0xFF207A4F.toInt(),
+                    warning = 0xFF9B6A10.toInt(),
                     danger = 0xFF9D3838.toInt()
                 )
             }
