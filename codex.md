@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.8` / `versionCode 18`.
+Current Android version: `0.9.9` / `versionCode 19`.
 
 ## GitHub Workflow
 
@@ -37,9 +37,12 @@ Current Android version: `0.9.8` / `versionCode 18`.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
 - Android Auto support should go through `AlertsMediaBrowserService` as the media-section browser service; the manifest intentionally does not register `AlertsCarAppService`.
+- `AlertsMediaBrowserService` should keep the media-playback foreground service declaration and active paused `MediaSessionCompat` metadata; this mirrors production Android Auto media-app behavior and helps avoid the large template pane.
 - `AlertsCarAppService` was deleted in `0.9.8`; keep Android Auto media-browser-only unless the user explicitly accepts large template pane behavior.
 - `AlertMonitorService` recalculates saved alert distances on every live location update and refreshes remote alert data only on the configured interval.
+- `AlertMonitorService` throttles UI broadcasts while moving so distance-only updates stay live without repainting the screen every location tick.
 - Background monitoring intentionally separates `cached_alerts` from visible `active_alerts`: fetch wide, cache briefly, then write only current in-radius alerts to the UI/Android Auto list.
 - Release `0.9.7` contains the media-browser-only Android Auto entry, direction arrows for every alert, and live distance updates without waiting for remote refresh.
 - Release `0.9.8` adds modernized View UI, configurable movement-cache settings, Android Auto title-level direction/distance display, and removes the fallback CarAppService.
+- Release `0.9.9` adds Android Auto media-playback service metadata, active paused media session metadata, and movement UI broadcast throttling.
 - Google Maps navigation detection is notification-listener based. The app cannot read Google Maps route geometry, so route alerts are approximated by monitoring live device position while Maps navigation is active.

@@ -50,6 +50,9 @@ class AlertMonitorService : Service() {
     private val prevDistances = HashMap<String, Float>()
     private var lastGeocodedLocation: Location? = null
     private var lastAlertRefreshAtMillis = 0L
+    private var lastUiBroadcastAtMillis = 0L
+    private var lastVisibleIdsFingerprint = ""
+    private var lastVisibleDistanceFingerprint = ""
 
     private val navReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -167,7 +170,7 @@ class AlertMonitorService : Service() {
                 alertStore.saveCachedAlerts(cached, updateFetchedAt = fetched.isNotEmpty())
             }
             alertStore.saveActiveAlerts(visible)
-            sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+            broadcastVisibleAlerts(visible, force = true)
             geocodeCurrentPosition(location)
 
             notifyNewAlerts(visible)
@@ -184,6 +187,7 @@ class AlertMonitorService : Service() {
         val current = if (cached.isNotEmpty()) cached else alertStore.activeAlerts()
         if (current.isEmpty()) {
             alertStore.saveActiveAlerts(emptyList())
+            broadcastVisibleAlerts(emptyList())
             return emptyList()
         }
 
@@ -194,8 +198,27 @@ class AlertMonitorService : Service() {
             alertStore.saveCachedAlerts(updatedCache.take(MAX_CACHED_ALERTS), updateFetchedAt = false)
         }
         alertStore.saveActiveAlerts(visible)
-        sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+        broadcastVisibleAlerts(visible)
         return visible
+    }
+
+    private fun broadcastVisibleAlerts(alerts: List<RoadAlert>, force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        val idsFingerprint = alerts.joinToString("|") { it.id }
+        val distanceFingerprint = alerts.joinToString("|") {
+            "${it.id}:${(it.distanceMeters / DISTANCE_UI_BUCKET_METERS).toInt()}"
+        }
+        val idsChanged = idsFingerprint != lastVisibleIdsFingerprint
+        val distancesChanged = distanceFingerprint != lastVisibleDistanceFingerprint
+        val minElapsed = now - lastUiBroadcastAtMillis >= MIN_UI_BROADCAST_INTERVAL_MILLIS
+        val maxElapsed = now - lastUiBroadcastAtMillis >= MAX_UI_BROADCAST_INTERVAL_MILLIS
+
+        if (!force && !idsChanged && (!distancesChanged || !minElapsed) && !maxElapsed) return
+
+        lastUiBroadcastAtMillis = now
+        lastVisibleIdsFingerprint = idsFingerprint
+        lastVisibleDistanceFingerprint = distanceFingerprint
+        sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
     }
 
     private fun mergeCachedAlerts(
@@ -289,9 +312,9 @@ class AlertMonitorService : Service() {
                 val geocoder = android.location.Geocoder(this@AlertMonitorService, java.util.Locale.getDefault())
                 val addrs = geocoder.getFromLocation(location.latitude, location.longitude, 1)
                 val line = addrs?.firstOrNull()?.getAddressLine(0)
-                if (!line.isNullOrBlank()) {
+                if (!line.isNullOrBlank() && line != settings.currentLocationAddress) {
                     settings.currentLocationAddress = line
-                    sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+                    broadcastVisibleAlerts(alertStore.activeAlerts())
                     AppLogger.d(TAG, "Current address: $line")
                 }
             }.onFailure { AppLogger.w(TAG, "Geocode current pos failed: ${it.message}") }
@@ -384,5 +407,8 @@ class AlertMonitorService : Service() {
         private const val PASSED_BEARING_DIFF_DEGREES = 100f
         private const val MAX_NOTIFIED_IDS = 100
         private const val MAX_CACHED_ALERTS = 200
+        private const val DISTANCE_UI_BUCKET_METERS = 100f
+        private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 12_000L
+        private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 30_000L
     }
 }

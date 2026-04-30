@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.support.v4.media.MediaBrowserCompat
 import android.support.v4.media.MediaDescriptionCompat
+import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.media.MediaBrowserServiceCompat
@@ -26,6 +27,7 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
 
     private val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            updateMediaSession()
             notifyChildrenChanged(ROOT_ID)
         }
     }
@@ -40,16 +42,19 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
                 override fun onPlayFromMediaId(mediaId: String, extras: Bundle?) {
                     openAlert(mediaId)
                 }
+
+                override fun onPlay() {
+                    openNearestAlert()
+                }
+
+                override fun onPause() {
+                    updateMediaSession()
+                }
             })
-            setPlaybackState(
-                PlaybackStateCompat.Builder()
-                    .setActions(PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID)
-                    .setState(PlaybackStateCompat.STATE_STOPPED, 0L, 0f)
-                    .build()
-            )
             isActive = true
         }
         sessionToken = mediaSession.sessionToken
+        updateMediaSession()
     }
 
     override fun onDestroy() {
@@ -113,6 +118,38 @@ class AlertsMediaBrowserService : MediaBrowserServiceCompat() {
             "https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&navigate=yes&z=10&utm_source=$packageName"
         )
         startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun openNearestAlert() {
+        val alert = alertStore.activeAlerts().minByOrNull { it.distanceMeters } ?: return
+        openAlert("$ALERT_ID_PREFIX${Uri.encode(alert.id)}")
+    }
+
+    private fun updateMediaSession() {
+        val alerts = alertStore.activeAlerts()
+            .filterNot { it.id in alertStore.passedAlertIds() }
+            .sortedBy { it.distanceMeters }
+        val nearest = alerts.firstOrNull()
+        val title = nearest?.let { "${directionDistanceLine(it)} · ${it.title}" } ?: "No active road alerts"
+        val subtitle = nearest?.addressLine() ?: "Monitoring for nearby alerts"
+
+        mediaSession.setMetadata(
+            MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, subtitle)
+                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Traffic Alerts")
+                .build()
+        )
+        mediaSession.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                        PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE
+                )
+                .setState(PlaybackStateCompat.STATE_PAUSED, 0L, 0f)
+                .build()
+        )
     }
 
     private fun RoadAlert.addressLine(): String =

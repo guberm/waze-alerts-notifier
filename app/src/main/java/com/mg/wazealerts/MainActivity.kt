@@ -372,9 +372,15 @@ class MainActivity : Activity() {
         secondsToRefresh = (settings.pollIntervalMillis / 1000).toInt()
         countdownTimer = object : CountDownTimer(settings.pollIntervalMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                secondsToRefresh = (millisUntilFinished / 1000).toInt()
-                // Post to avoid calling setContentView() during an in-flight layout traversal
-                window.decorView.post { if (!isFinishing) render() }
+                val nextSeconds = (millisUntilFinished / 1000).toInt()
+                val shouldRender = secondsToRefresh == 0 ||
+                    nextSeconds % 10 == 0 ||
+                    nextSeconds <= 5
+                secondsToRefresh = nextSeconds
+                if (shouldRender) {
+                    // Post to avoid calling setContentView() during an in-flight layout traversal
+                    window.decorView.post { if (!isFinishing) render() }
+                }
             }
             override fun onFinish() {
                 secondsToRefresh = 0

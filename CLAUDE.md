@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.8` / `versionCode 18`
+- Current app version: `0.9.9` / `versionCode 19`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -18,10 +18,13 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
 - `AlertsMediaBrowserService` is the Android Auto entrypoint and exposes the latest stored active alerts through Android Auto's media browser surface.
+- `AlertsMediaBrowserService` declares media-playback foreground service metadata and maintains an active paused `MediaSessionCompat` with nearest-alert metadata so Android Auto classifies it as a media app.
 - `AlertsCarAppService` was removed in `0.9.8`; do not reintroduce a `CarAppService`/template entry unless the user accepts the larger Android Auto template pane behavior.
 - `AlertMonitorService` refreshes remote alert data on the configured interval with a wider cache radius, then recalculates and saves only visible active alerts on every live location update.
+- `AlertMonitorService` throttles visible-alert UI broadcasts while moving: alert identity changes still broadcast immediately, but distance-only updates are bucketed to avoid constant phone/Android Auto repainting.
 - Release `0.9.7` shipped the Android Auto media-browser-only entry, per-alert direction arrows, and live distance recalculation between remote alert refreshes.
 - Release `0.9.8` shipped the modernized phone UI, configurable movement-cache settings, Android Auto title-level direction/distance display, and full removal of the fallback CarAppService.
+- Release `0.9.9` shipped the Pocket Casts-inspired Android Auto media-playback service metadata, active paused media session, and throttled live movement UI updates.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.
 - `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.
