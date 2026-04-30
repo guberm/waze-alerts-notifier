@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.6` / `versionCode 16`
+- Current app version: `0.9.7` / `versionCode 17`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -17,8 +17,10 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - `ThemeMode` and `UiPalette` provide System, Light, and Dark rendering for the View-based UI.
 - The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
-- `AlertsCarAppService` exposes Android Auto alerts as an `androidx.car.app.category.MEDIA` template surface with `minCarApiLevel=8`, so the host can place it in the media-side panel instead of the large POI/template pane.
-- `AlertsMediaBrowserService` exposes the latest stored active alerts through Android Auto's media browser surface. Android Auto still owns the final split-screen sizing and whether a separate media player shares that panel.
+- `AlertsMediaBrowserService` is the Android Auto entrypoint and exposes the latest stored active alerts through Android Auto's media browser surface.
+- `AlertsCarAppService` is kept as a fallback template implementation but is not registered in the manifest; avoid re-enabling it unless the user accepts the larger template pane behavior.
+- `AlertMonitorService` refreshes remote alert data on the configured interval but recalculates saved alert distances on every live location update.
+- Release `0.9.7` shipped the Android Auto media-browser-only entry, per-alert direction arrows, and live distance recalculation between remote alert refreshes.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.
 - `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.

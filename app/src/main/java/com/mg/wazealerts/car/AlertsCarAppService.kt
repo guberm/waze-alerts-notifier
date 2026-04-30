@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.support.v4.media.session.MediaSessionCompat
@@ -29,6 +30,7 @@ import com.mg.wazealerts.AppLogger
 import com.mg.wazealerts.model.RoadAlert
 import com.mg.wazealerts.settings.AppSettings
 import com.mg.wazealerts.store.AlertStore
+import java.util.Locale
 
 class AlertsCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator = HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
@@ -137,7 +139,10 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
 
     private fun loadAlerts() {
         val passed = alertStore.passedAlertIds()
-        alerts = alertStore.activeAlerts().filterNot { it.id in passed }
+        alerts = alertStore.activeAlerts()
+            .filterNot { it.id in passed }
+            .map { it.withLiveDistance() }
+            .sortedBy { it.distanceMeters }
     }
 
     private fun safeInvalidate() {
@@ -164,8 +169,8 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
                     sectionBuilder.addItem(
                         Row.Builder()
                             .setTitle(alert.title)
-                            .addText(alert.address ?: "%.5f, %.5f".format(alert.latitude, alert.longitude))
-                            .addText("${alert.distanceMeters.toInt()} m away")
+                            .addText(directionDistanceLine(alert))
+                            .addText(alert.address ?: "%.5f, %.5f".format(Locale.US, alert.latitude, alert.longitude))
                             .setOnClickListener { openNavigation(alert) }
                             .build()
                     )
@@ -198,4 +203,75 @@ class AlertsCarScreen(carContext: CarContext) : Screen(carContext) {
             carContext.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }.onFailure { AppLogger.e("CarScreen", "openNavigation failed: ${it.message}") }
     }
+
+    private fun RoadAlert.withLiveDistance(): RoadAlert {
+        val current = currentLocation() ?: return this
+        val target = alertLocation(this)
+        return copy(distanceMeters = current.distanceTo(target))
+    }
+
+    private fun directionDistanceLine(alert: RoadAlert): String {
+        val current = currentLocation() ?: return "${formatDistance(alert.distanceMeters)} away"
+        val target = alertLocation(alert)
+        val bearingToAlert = current.bearingTo(target)
+        val heading = settings.lastBearingDegrees
+        val distance = current.distanceTo(target)
+        return if (heading >= 0f) {
+            val relative = normalizeDegrees(bearingToAlert - heading)
+            "${relativeArrow(relative)} ${relativeLabel(relative)} - ${formatDistance(distance)} away"
+        } else {
+            "${compassArrow(bearingToAlert)} ${compassLabel(bearingToAlert)} - ${formatDistance(distance)} away"
+        }
+    }
+
+    private fun currentLocation(): Location? {
+        val lat = settings.lastLatitude.toDouble()
+        val lon = settings.lastLongitude.toDouble()
+        if (lat == 0.0 && lon == 0.0) return null
+        return Location("").apply {
+            latitude = lat
+            longitude = lon
+        }
+    }
+
+    private fun alertLocation(alert: RoadAlert): Location =
+        Location("").apply {
+            latitude = alert.latitude
+            longitude = alert.longitude
+        }
+
+    private fun normalizeDegrees(degrees: Float): Float = (degrees + 360f) % 360f
+
+    private fun relativeArrow(degrees: Float): String = when {
+        degrees < 22.5f || degrees >= 337.5f -> "↑"
+        degrees < 67.5f -> "↗"
+        degrees < 112.5f -> "→"
+        degrees < 157.5f -> "↘"
+        degrees < 202.5f -> "↓"
+        degrees < 247.5f -> "↙"
+        degrees < 292.5f -> "←"
+        else -> "↖"
+    }
+
+    private fun relativeLabel(degrees: Float): String = when {
+        degrees < 22.5f || degrees >= 337.5f -> "ahead"
+        degrees < 67.5f -> "front right"
+        degrees < 112.5f -> "right"
+        degrees < 157.5f -> "back right"
+        degrees < 202.5f -> "behind"
+        degrees < 247.5f -> "back left"
+        degrees < 292.5f -> "left"
+        else -> "front left"
+    }
+
+    private fun compassArrow(degrees: Float): String = relativeArrow(normalizeDegrees(degrees))
+
+    private fun compassLabel(degrees: Float): String {
+        val labels = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+        val index = ((normalizeDegrees(degrees) + 22.5f) / 45f).toInt() % labels.size
+        return labels[index]
+    }
+
+    private fun formatDistance(meters: Float): String =
+        if (meters >= 1000f) "%.1f km".format(Locale.US, meters / 1000f) else "${meters.toInt()} m"
 }

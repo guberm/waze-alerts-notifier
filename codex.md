@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.6` / `versionCode 16`.
+Current Android version: `0.9.7` / `versionCode 17`.
 
 ## GitHub Workflow
 
@@ -36,6 +36,8 @@ Current Android version: `0.9.6` / `versionCode 16`.
 - `TomTomTrafficAlertProvider` is the keyed global traffic provider for incidents, roadwork, jams, and hazards.
 - The demo provider is for local testing only and is off by default for new installs.
 - Public Waze documentation supports Deep Links, not a stable public read API for live Waze police/camera/roadwork alerts.
-- Android Auto support has two media-side surfaces: `AlertsCarAppService` as an `androidx.car.app.category.MEDIA` template app, and `AlertsMediaBrowserService` as the media-section browser service.
-- `AlertsCarAppService` declares `minCarApiLevel=8` and uses a media-compatible template path so Android Auto can place alerts in the media-side panel instead of opening them as the large POI/template pane. Android Auto and the head unit still decide the exact split sizing and whether a separate media player shares that panel.
+- Android Auto support should go through `AlertsMediaBrowserService` as the media-section browser service; the manifest intentionally does not register `AlertsCarAppService`.
+- `AlertsCarAppService` remains as a fallback template implementation, but re-registering it can make Android Auto promote the app into the larger template pane.
+- `AlertMonitorService` recalculates saved alert distances on every live location update and refreshes remote alert data only on the configured interval.
+- Release `0.9.7` contains the media-browser-only Android Auto entry, direction arrows for every alert, and live distance updates without waiting for remote refresh.
 - Google Maps navigation detection is notification-listener based. The app cannot read Google Maps route geometry, so route alerts are approximated by monitoring live device position while Maps navigation is active.

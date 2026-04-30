@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="androidx.car.app.MEDIA_TEMPLATES" />
 
     <uses-feature
         android:name="android.hardware.location.gps"
@@ -51,18 +50,6 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
-        </service>
-
-        <service
-            android:name=".car.AlertsCarAppService"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.MEDIA" />
-            </intent-filter>
-            <meta-data
-                android:name="androidx.car.app.minCarApiLevel"
-                android:value="8" />
         </service>
 
         <service

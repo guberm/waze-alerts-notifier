@@ -49,6 +49,7 @@ class AlertMonitorService : Service() {
     private var isMapsNavigating = false
     private val prevDistances = HashMap<String, Float>()
     private var lastGeocodedLocation: Location? = null
+    private var lastAlertRefreshAtMillis = 0L
 
     private val navReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -126,9 +127,9 @@ class AlertMonitorService : Service() {
             return
         }
 
-        val request = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, settings.pollIntervalMillis)
-            .setMinUpdateIntervalMillis(settings.pollIntervalMillis / 2)
-            .setMinUpdateDistanceMeters(100f)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, LIVE_DISTANCE_INTERVAL_MILLIS)
+            .setMinUpdateIntervalMillis(LIVE_DISTANCE_MIN_INTERVAL_MILLIS)
+            .setMinUpdateDistanceMeters(LIVE_DISTANCE_MIN_MOVE_METERS)
             .build()
         fusedLocation.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
     }
@@ -144,47 +145,89 @@ class AlertMonitorService : Service() {
                 if (location.hasBearing()) "${location.bearing.toInt()}°" else "n/a"
             ))
 
+            val liveAlerts = updateStoredAlertDistances(location)
+            if (!shouldRefreshAlerts()) {
+                notifyNewAlerts(liveAlerts)
+                geocodeCurrentPosition(location)
+                return@launch
+            }
+
             val alerts = repository.nearby(location)
+                .map { it.withDistanceFrom(location) }
+                .sortedBy { it.distanceMeters }
             AppLogger.i(TAG, "Fetched ${alerts.size} alerts (radius=${settings.radiusMeters}m)")
 
-            // Detect alerts that were passed during navigation
-            if (isMapsNavigating && settings.lastBearingDegrees >= 0f) {
-                val bearing = settings.lastBearingDegrees
-                for (alert in alerts) {
-                    val prev = prevDistances[alert.id]
-                    if (prev != null && alert.distanceMeters > prev + 250f) {
-                        val alertLoc = Location("").apply {
-                            latitude = alert.latitude
-                            longitude = alert.longitude
-                        }
-                        val diff = bearingDiff(bearing, location.bearingTo(alertLoc))
-                        if (diff > 100f) {
-                            alertStore.markPassed(alert.id)
-                            AppLogger.i(TAG, "Passed: ${alert.title} (${prev.toInt()}m → ${alert.distanceMeters.toInt()}m, diff=${diff.toInt()}°)")
-                        }
-                    }
-                    prevDistances[alert.id] = alert.distanceMeters
-                }
-                prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
-            }
+            lastAlertRefreshAtMillis = System.currentTimeMillis()
+            updatePassedAlerts(alerts, location)
 
             alertStore.saveActiveAlerts(alerts)
             sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
             geocodeCurrentPosition(location)
 
-            if (!settings.notificationsEnabled) return@launch
-            if (isMapsNavigating) {
-                val passed = alertStore.passedAlertIds()
-                alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) || it.id in passed }.forEach { alert ->
-                    notifiedIds += alert.id
-                    showAlert(alert)
-                    AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
+            notifyNewAlerts(alerts)
+        }
+    }
+
+    private fun shouldRefreshAlerts(): Boolean {
+        val elapsed = System.currentTimeMillis() - lastAlertRefreshAtMillis
+        return lastAlertRefreshAtMillis == 0L || elapsed >= settings.pollIntervalMillis
+    }
+
+    private fun updateStoredAlertDistances(location: Location): List<RoadAlert> {
+        val current = alertStore.activeAlerts()
+        if (current.isEmpty()) return emptyList()
+
+        val updated = current.map { it.withDistanceFrom(location) }.sortedBy { it.distanceMeters }
+        updatePassedAlerts(updated, location)
+        alertStore.saveActiveAlerts(updated)
+        sendBroadcast(Intent("com.mg.wazealerts.ALERTS_UPDATED").setPackage(packageName))
+        return updated
+    }
+
+    private fun updatePassedAlerts(alerts: List<RoadAlert>, location: Location) {
+        if (!isMapsNavigating || settings.lastBearingDegrees < 0f) {
+            prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
+            alerts.forEach { prevDistances[it.id] = it.distanceMeters }
+            return
+        }
+
+        val bearing = settings.lastBearingDegrees
+        for (alert in alerts) {
+            val prev = prevDistances[alert.id]
+            if (prev != null && alert.distanceMeters > prev + PASSED_DISTANCE_DELTA_METERS) {
+                val alertLoc = Location("").apply {
+                    latitude = alert.latitude
+                    longitude = alert.longitude
+                }
+                val diff = bearingDiff(bearing, location.bearingTo(alertLoc))
+                if (diff > PASSED_BEARING_DIFF_DEGREES) {
+                    alertStore.markPassed(alert.id)
+                    AppLogger.i(TAG, "Passed: ${alert.title} (${prev.toInt()}m -> ${alert.distanceMeters.toInt()}m, diff=${diff.toInt()}deg)")
                 }
             }
-            while (notifiedIds.size > 100) {
-                notifiedIds.remove(notifiedIds.first())
-            }
+            prevDistances[alert.id] = alert.distanceMeters
         }
+        prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
+    }
+
+    private fun notifyNewAlerts(alerts: List<RoadAlert>) {
+        if (!settings.notificationsEnabled || !isMapsNavigating) return
+
+        val passed = alertStore.passedAlertIds()
+        alerts.filterNot { it.id in notifiedIds || alertStore.isMuted(it.id) || it.id in passed }.forEach { alert ->
+            notifiedIds += alert.id
+            showAlert(alert)
+            AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
+        }
+        while (notifiedIds.size > MAX_NOTIFIED_IDS) {
+            notifiedIds.remove(notifiedIds.first())
+        }
+    }
+
+    private fun RoadAlert.withDistanceFrom(location: Location): RoadAlert {
+        val result = FloatArray(1)
+        Location.distanceBetween(location.latitude, location.longitude, latitude, longitude, result)
+        return copy(distanceMeters = result[0])
     }
 
     private fun geocodeCurrentPosition(location: Location) {
@@ -285,5 +328,11 @@ class AlertMonitorService : Service() {
         private const val ONGOING_NOTIFICATION_ID = 4100
         private const val CHANNEL_MONITORING = "monitoring"
         private const val CHANNEL_ALERTS = "road_alerts"
+        private const val LIVE_DISTANCE_INTERVAL_MILLIS = 2_000L
+        private const val LIVE_DISTANCE_MIN_INTERVAL_MILLIS = 1_000L
+        private const val LIVE_DISTANCE_MIN_MOVE_METERS = 5f
+        private const val PASSED_DISTANCE_DELTA_METERS = 250f
+        private const val PASSED_BEARING_DIFF_DEGREES = 100f
+        private const val MAX_NOTIFIED_IDS = 100
     }
 }
