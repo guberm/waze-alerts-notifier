@@ -11,8 +11,8 @@ android {
         applicationId = "com.mg.wazealerts"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.9.11"
+        versionCode = 22
+        versionName = "0.9.12"
     }
 
     compileOptions {
@@ -33,7 +33,6 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.car.app:app:1.7.0")
     implementation("com.google.android.gms:play-services-location:21.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

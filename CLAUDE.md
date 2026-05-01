@@ -5,15 +5,15 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.11` / `versionCode 21`
+- Current app version: `0.9.12` / `versionCode 22`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Architecture Notes
 
-- `MainActivity` is the operational dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
-- `SettingsActivity` owns appearance, live sources, background monitoring, notification, demo source, alert type, and permission controls.
+- `MainActivity` is the operational dashboard for active alerts, navigation, and per-alert mute controls.
+- `SettingsActivity` owns appearance, scan radius, refresh cadence, live sources, background monitoring, notification, demo source, alert type, and permission controls.
 - `ThemeMode` and `UiPalette` provide System, Light, and Dark rendering for the View-based UI.
 - The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
 - Phone alert cards use a dedicated adjacent direction/distance card on the left; keep it aligned with the alert card height rather than moving arrow/distance back into the alert title row.
@@ -29,6 +29,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.9` first tried media-playback Android Auto integration; that was rejected because it showed as a player and still used the large pane. Keep the corrected path notification-only.
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance UI updates without full-screen rerenders, moves phone arrow/distance into an adjacent same-height card, and posts Android Auto alerts as ongoing navigation-category car notifications independent of Google Maps detection.
+- Release `0.9.12` moves the Controls panel (scan radius and refresh cadence sliders) from `MainActivity` to `SettingsActivity`, and fixes Android Auto notification delivery by switching from `CarAppExtender`/`CarNotificationManager` (which require a registered `CarAppService`) to `MessagingStyle` with `CATEGORY_MESSAGE`.
 - `MainActivity` keeps the screen awake while the phone dashboard is open.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.

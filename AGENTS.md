@@ -1,18 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [Waze Alerts Notifier] recent context, 2026-05-01
+# [Waze Alerts Notifier] recent context, 2026-05-01 10:53am EDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: refreshed manually from current repo work
-
-### May 1, 2026
-1972 🔴 v0.9.11 fixes jerky countdown and live distance UI updates by updating labels in place instead of rebuilding the full phone screen.
-1973 🔴 Phone alert arrow/distance now lives in a dedicated adjacent card aligned with the alert notification card height.
-1974 🔴 Android Auto alert notifications now post as ongoing navigation-category car notifications and are no longer gated by Google Maps navigation detection.
+Stats: 17 obs (6,382t read) | 893,242t work | 99% savings
 
 ### Apr 30, 2026
 1943 1:57p 🔴 Direction arrow missing in phone UI alert chips
@@ -27,8 +22,12 @@ Stats: refreshed manually from current repo work
 1967 " 🔵 New Claude session replayed the entire v0.9.9 release flow after context compaction
 1968 5:30p 🔵 automotive_app_desc.xml declares media use — root cause candidate for Android Auto player classification
 1969 " 🔵 AlertMonitorService.kt v0.9.9 full implementation confirmed — broadcast throttle constants
-1970 5:44p 🔴 Android Auto corrected to notification-only dynamic alerts; media player surface removed
-1971 " ✅ Phone dashboard now keeps screen awake while open
+### May 1, 2026
+1983 8:00a 🔵 Android Auto Navigation UI Bug Report — 3 Issues Identified
+1985 " 🟣 Alert card split into direction sidebar + main card layout
+1986 " 🟣 Countdown timer updates every second via label patching instead of full re-render
+1987 " 🔴 Android Auto notifications now fire without requiring active navigation state
+1984 8:01a 🔵 Waze Alerts Notifier — Codebase Audit for 3 Active Bugs (v0.8.0)
 
-Access 713k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 893k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

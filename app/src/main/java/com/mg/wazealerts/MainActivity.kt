@@ -13,7 +13,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -88,7 +87,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Smoother countdown and live distance updates\n• Direction and distance moved into an attached alert card\n• Android Auto alerts now use ongoing navigation notifications\n• Android Auto notifications no longer require Google Maps detection")
+                .setMessage("• Radius and refresh controls moved to Settings\n• Android Auto notifications now use MessagingStyle for reliable delivery")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }
@@ -139,7 +138,6 @@ class MainActivity : Activity() {
 
         header()
         if (settings.mapsNavigationActive) navPanel()
-        controlsPanel()
         alertsPanel()
     }
 
@@ -202,41 +200,6 @@ class MainActivity : Activity() {
             }
         }
         return row
-    }
-
-    private fun controlsPanel() {
-        root.addView(panel {
-            addView(sectionHeader("Controls", "Tune the scan area and update cadence."))
-            val metrics = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            metrics.addView(metricTile("Scan", formatRadius(settings.radiusMeters), "radius"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                setMargins(0, 0, 8.dp, 0)
-            })
-            metrics.addView(metricTile("Refresh", formatRefresh(settings.pollIntervalMillis), "cadence"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            addView(metrics, blockParams(top = 4.dp, bottom = 8.dp))
-            addView(sliderRow(
-                label = "Radius",
-                value = formatRadius(settings.radiusMeters),
-                max = RADIUS_STEPS.size - 1,
-                progress = RADIUS_STEPS.indexOf(RADIUS_STEPS.minByOrNull { kotlin.math.abs(it - settings.radiusMeters) } ?: RADIUS_STEPS.last()).coerceAtLeast(0),
-                onProgress = { progress -> settings.radiusMeters = RADIUS_STEPS[progress] },
-                valueText = { formatRadius(settings.radiusMeters) },
-                onStart = { countdownTimer?.cancel() },
-                onStop = { refreshAlerts() }
-            ))
-            addView(sliderRow(
-                label = "Refresh time",
-                value = formatRefresh(settings.pollIntervalMillis),
-                max = REFRESH_STEPS_MILLIS.size - 1,
-                progress = REFRESH_STEPS_MILLIS.indexOf(REFRESH_STEPS_MILLIS.minByOrNull { kotlin.math.abs(it - settings.pollIntervalMillis) } ?: REFRESH_STEPS_MILLIS.last()).coerceAtLeast(0),
-                onProgress = { progress -> settings.pollIntervalMillis = REFRESH_STEPS_MILLIS[progress] },
-                valueText = { formatRefresh(settings.pollIntervalMillis) },
-                onStart = { countdownTimer?.cancel() },
-                onStop = { startCountdown() }
-            ))
-        })
     }
 
     private fun alertsPanel() {
@@ -336,44 +299,6 @@ class MainActivity : Activity() {
             })
             addView(actions)
         }
-
-    private fun sliderRow(
-        label: String,
-        value: String,
-        max: Int,
-        progress: Int,
-        onProgress: (Int) -> Unit,
-        valueText: () -> String,
-        onStart: () -> Unit = {},
-        onStop: () -> Unit
-    ): LinearLayout {
-        val valueView = text(value, 14f, palette.title, bold = true)
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 12.dp, 0, 0)
-            val row = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            row.addView(text(label, 14f, palette.body), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(valueView)
-            addView(row)
-            addView(SeekBar(this@MainActivity).apply {
-                this.max = max
-                this.progress = progress
-                setPadding(0, 2.dp, 0, 0)
-                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        onProgress(progress)
-                        valueView.text = valueText()
-                    }
-
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) = onStart()
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) = onStop()
-                })
-            })
-        }
-    }
 
     private fun refreshAlerts() {
         if (!hasLocationPermission()) {
@@ -659,16 +584,6 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(30.dp, 30.dp)
         }
 
-    private fun metricTile(label: String, value: String, caption: String): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(12.dp, 10.dp, 12.dp, 11.dp)
-            background = rounded(if (palette.dark) 0xFF182824.toInt() else 0xFFF6FAF8.toInt(), palette.border)
-            addView(text(label, 11f, palette.secondary, bold = true))
-            addView(text(value, 18f, palette.title, bold = true), blockParams(top = 4.dp))
-            addView(text(caption, 11f, palette.secondary), blockParams(top = 3.dp))
-        }
-
     private fun text(value: String, size: Float, color: Int, bold: Boolean = false): TextView =
         TextView(this).apply {
             text = value
@@ -716,8 +631,4 @@ class MainActivity : Activity() {
     private val Int.dp: Int
         get() = (this * resources.displayMetrics.density).toInt()
 
-    companion object {
-        private val REFRESH_STEPS_MILLIS = longArrayOf(30_000L, 60_000L, 120_000L, 180_000L, 300_000L)
-        private val RADIUS_STEPS = intArrayOf(100, 200, 300, 500, 1000, 2000, 3000)
-    }
 }

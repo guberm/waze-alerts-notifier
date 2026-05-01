@@ -36,8 +36,7 @@ import kotlinx.coroutines.launch
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
-import androidx.car.app.notification.CarAppExtender
-import androidx.car.app.notification.CarNotificationManager
+import androidx.core.app.Person
 import com.mg.wazealerts.AppLogger
 import java.util.Locale
 
@@ -359,30 +358,24 @@ class AlertMonitorService : Service() {
 
     private fun showAlert(alert: RoadAlert, location: Location) {
         val directionLine = directionDistanceLine(alert, location)
-        val title = "$directionLine - ${alert.title}"
-        val text = alert.addressLine()
-        val carAppExtender = CarAppExtender.Builder()
-            .setImportance(NotificationManager.IMPORTANCE_HIGH)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setContentIntent(wazeIntent(alert))
-            .build()
-
+        val text = "$directionLine — ${alert.addressLine()}"
+        val sender = Person.Builder().setName(alert.kind.label).setBot(true).build()
+        val style = NotificationCompat.MessagingStyle(sender)
+            .setConversationTitle(alert.title)
+            .setGroupConversation(false)
+            .addMessage(text, System.currentTimeMillis(), sender)
         val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
+            .setContentTitle(alert.title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$directionLine\n$text\n${alert.description}"))
+            .setStyle(style)
             .setContentIntent(wazeIntent(alert))
             .setAutoCancel(false)
-            .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .extend(carAppExtender)
         getSystemService(NotificationManager::class.java).notify(alert.id.hashCode(), builder.build())
-        CarNotificationManager.from(this).notify(alert.id.hashCode(), builder)
     }
 
     private fun cancelAlertNotifications() {
@@ -391,9 +384,7 @@ class AlertMonitorService : Service() {
     }
 
     private fun cancelAlertNotification(alertId: String) {
-        val notificationId = alertId.hashCode()
-        runCatching { CarNotificationManager.from(this).cancel(notificationId) }
-        getSystemService(NotificationManager::class.java).cancel(notificationId)
+        getSystemService(NotificationManager::class.java).cancel(alertId.hashCode())
     }
 
     private fun createChannels() {

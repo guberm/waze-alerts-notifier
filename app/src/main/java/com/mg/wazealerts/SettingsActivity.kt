@@ -60,6 +60,7 @@ class SettingsActivity : Activity() {
 
         header()
         appearancePanel()
+        controlsPanel()
         sourcesPanel()
         behaviorPanel()
         cachePanel()
@@ -271,6 +272,47 @@ class SettingsActivity : Activity() {
         })
     }
 
+    private fun controlsPanel() {
+        root.addView(panel {
+            addView(sectionHeader("Controls", "Tune the scan area and update cadence."))
+            val metrics = LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            metrics.addView(metricTile("Scan", formatRadius(settings.radiusMeters), "radius"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(0, 0, 8.dp, 0)
+            })
+            metrics.addView(metricTile("Refresh", formatRefresh(settings.pollIntervalMillis), "cadence"), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            addView(metrics, blockParams(top = 4.dp, bottom = 8.dp))
+            addView(sliderRow(
+                label = "Radius",
+                value = formatRadius(settings.radiusMeters),
+                max = RADIUS_STEPS.size - 1,
+                progress = stepIndex(RADIUS_STEPS, settings.radiusMeters),
+                onProgress = { settings.radiusMeters = RADIUS_STEPS[it] },
+                valueText = { formatRadius(settings.radiusMeters) }
+            ))
+            addView(sliderRow(
+                label = "Refresh time",
+                value = formatRefresh(settings.pollIntervalMillis),
+                max = REFRESH_STEPS_MILLIS.size - 1,
+                progress = stepIndexLong(REFRESH_STEPS_MILLIS, settings.pollIntervalMillis),
+                onProgress = { settings.pollIntervalMillis = REFRESH_STEPS_MILLIS[it] },
+                valueText = { formatRefresh(settings.pollIntervalMillis) }
+            ))
+        })
+    }
+
+    private fun metricTile(label: String, value: String, caption: String): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12.dp, 10.dp, 12.dp, 11.dp)
+            background = rounded(if (palette.dark) 0xFF182824.toInt() else 0xFFF6FAF8.toInt(), palette.border)
+            addView(text(label, 11f, palette.secondary, bold = true))
+            addView(text(value, 18f, palette.title, bold = true), blockParams(top = 4.dp))
+            addView(text(caption, 11f, palette.secondary), blockParams(top = 3.dp))
+        }
+
     private fun sliderRow(
         label: String,
         value: String,
@@ -382,6 +424,14 @@ class SettingsActivity : Activity() {
     private val Int.dp: Int
         get() = (this * resources.displayMetrics.density).toInt()
 
+    private fun formatRefresh(millis: Long): String {
+        val seconds = millis / 1000
+        return if (seconds < 60) "${seconds}s" else "${seconds / 60} min"
+    }
+
+    private fun stepIndexLong(steps: LongArray, value: Long): Int =
+        steps.indexOf(steps.minByOrNull { kotlin.math.abs(it - value) } ?: steps.first()).coerceAtLeast(0)
+
     private fun stepIndex(steps: IntArray, value: Int): Int =
         steps.indexOf(steps.minByOrNull { kotlin.math.abs(it - value) } ?: steps.first()).coerceAtLeast(0)
 
@@ -389,6 +439,8 @@ class SettingsActivity : Activity() {
         if (meters >= 1000) "${meters / 1000} km" else "$meters m"
 
     companion object {
+        private val RADIUS_STEPS = intArrayOf(100, 200, 300, 500, 1000, 2000, 3000)
+        private val REFRESH_STEPS_MILLIS = longArrayOf(30_000L, 60_000L, 120_000L, 180_000L, 300_000L)
         private val CACHE_TTL_STEPS_MINUTES = intArrayOf(5, 10, 20, 30, 60, 120)
         private val CACHE_MIN_RADIUS_STEPS = intArrayOf(3_000, 5_000, 10_000, 15_000, 25_000, 50_000)
         private val CACHE_MAX_RADIUS_STEPS = intArrayOf(5_000, 10_000, 15_000, 25_000, 50_000, 75_000, 100_000)
