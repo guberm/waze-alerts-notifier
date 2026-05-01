@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.10` (`versionCode 20`).
+Current version: `0.9.11` (`versionCode 21`).
 
 ## What works
 
@@ -19,9 +19,9 @@ Current version: `0.9.10` (`versionCode 20`).
 - Reverse-geocoded alert addresses in the phone UI, phone notifications, and Android Auto.
 - Wide movement cache: while monitoring, the app fetches a larger alert area and only displays currently relevant alerts inside the selected radius.
 - Movement cache controls in Settings for cache time, min/max cache radius, radius expansion, and visible alert limit.
-- Direction + live distance chips in the phone UI and dynamic Android Auto alert notifications.
+- Direction + live distance in a dedicated adjacent phone alert card and dynamic Android Auto alert notifications.
 - Phone dashboard keeps the screen awake while it is open.
-- Throttled live movement updates so distance changes stay current without constantly repainting the screen.
+- Smooth live movement updates: countdown, nearest distance, and per-alert direction/distance labels update without rebuilding the full phone screen.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Appearance setting with System, Light, and Dark modes.
 - Compact modern UI with status chips, grouped controls, and alert cards.
@@ -70,18 +70,20 @@ The app does not expose an Android Auto launcher, template, or media-player surf
 
 Each active road-alert notification is updated from live location data with the current arrow, relative direction, and distance. Tapping an alert opens the Waze deep link for that alert.
 
+Release `0.9.11` keeps the corrected notification-only Android Auto path, posts road-alert notifications as ongoing navigation-category car notifications, and removes the dependency on Google Maps notification detection before alert notifications can appear.
+
 Android Auto and the head unit own final notification presentation. The app intentionally avoids `MediaBrowserService`, `MediaSession`, and `CarAppService` entries because opening those surfaces can promote the app into a large split-screen pane.
 
 The APK no longer contains Android Auto media-browser metadata or the fallback `CarAppService` class.
 
 Google Maps route geometry is not exposed to third-party apps. When notification access is granted, `MapsNavigationListener` detects active Google Maps navigation notifications, starts monitoring if enabled, and `AlertMonitorService` posts native road-alert notifications around the live device position.
 
-During movement, remote providers are queried with a wider cache radius than the visible radius. Cached alerts live briefly and are re-filtered on every location update, so Android Auto and the phone UI show only current in-radius alerts while the app keeps nearby upcoming alerts ready without another network refresh. Distance and direction are recalculated from live location updates, but UI broadcasts are bucketed and throttled to avoid distracting full-screen refreshes while driving.
+During movement, remote providers are queried with a wider cache radius than the visible radius. Cached alerts live briefly and are re-filtered on every location update, so Android Auto and the phone UI show only current in-radius alerts while the app keeps nearby upcoming alerts ready without another network refresh. Distance and direction are recalculated from live location updates, and phone labels are updated in place to avoid distracting full-screen refreshes while driving.
 
 ## Release
 
 Release tags use `v<versionName>`. The current debug release asset should be named:
 
 ```text
-TrafficAlertsNotifier-debug-v0.9.10.apk
+TrafficAlertsNotifier-debug-v0.9.11.apk
 ```

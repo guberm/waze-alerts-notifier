@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.10` / `versionCode 20`
+- Current app version: `0.9.11` / `versionCode 21`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -16,16 +16,19 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - `SettingsActivity` owns appearance, live sources, background monitoring, notification, demo source, alert type, and permission controls.
 - `ThemeMode` and `UiPalette` provide System, Light, and Dark rendering for the View-based UI.
 - The phone UI intentionally uses compact status chips, grouped control panels, and repeated alert cards rather than large plain settings rows.
+- Phone alert cards use a dedicated adjacent direction/distance card on the left; keep it aligned with the alert card height rather than moving arrow/distance back into the alert title row.
 - `AlertMonitorService` is a foreground location service and posts alert notifications.
 - Android Auto support is notification-only: do not register `MediaBrowserService`, `MediaSessionCompat`, `automotive_app_desc`, or `CarAppService` unless the user explicitly accepts a full Android Auto app surface.
 - `AlertMonitorService` posts car-compatible alert notifications with live direction arrow, relative direction, distance, address, and Waze deep link.
+- Android Auto road-alert notifications must not depend on Google Maps notification detection; Waze/Android Auto notification delivery should work whenever monitoring, location, and notification permission are active.
 - `AlertsCarAppService` was removed in `0.9.8`; do not reintroduce a `CarAppService`/template entry unless the user accepts the larger Android Auto template pane behavior.
 - `AlertMonitorService` refreshes remote alert data on the configured interval with a wider cache radius, then recalculates and saves only visible active alerts on every live location update.
-- `AlertMonitorService` throttles visible-alert UI broadcasts while moving: alert identity changes still broadcast immediately, but distance-only updates are bucketed to avoid constant phone/Android Auto repainting.
+- `AlertMonitorService` throttles visible-alert UI broadcasts while moving: alert identity changes still broadcast immediately, but distance-only updates are bucketed narrowly enough to keep phone distance labels smooth.
 - Release `0.9.7` shipped the Android Auto media-browser-only entry, per-alert direction arrows, and live distance recalculation between remote alert refreshes.
 - Release `0.9.8` shipped the modernized phone UI, configurable movement-cache settings, Android Auto title-level direction/distance display, and full removal of the fallback CarAppService.
 - Release `0.9.9` first tried media-playback Android Auto integration; that was rejected because it showed as a player and still used the large pane. Keep the corrected path notification-only.
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
+- Release `0.9.11` smooths countdown/distance UI updates without full-screen rerenders, moves phone arrow/distance into an adjacent same-height card, and posts Android Auto alerts as ongoing navigation-category car notifications independent of Google Maps detection.
 - `MainActivity` keeps the screen awake while the phone dashboard is open.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.

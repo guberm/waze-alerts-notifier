@@ -286,7 +286,7 @@ class AlertMonitorService : Service() {
     }
 
     private fun syncAlertNotifications(alerts: List<RoadAlert>, location: Location) {
-        if (!settings.notificationsEnabled || !isMapsNavigating) {
+        if (!settings.notificationsEnabled || !hasNotificationPermission()) {
             cancelAlertNotifications()
             return
         }
@@ -374,11 +374,14 @@ class AlertMonitorService : Service() {
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$directionLine\n$text\n${alert.description}"))
             .setContentIntent(wazeIntent(alert))
-            .setAutoCancel(true)
+            .setAutoCancel(false)
+            .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .extend(carAppExtender)
+        getSystemService(NotificationManager::class.java).notify(alert.id.hashCode(), builder.build())
         CarNotificationManager.from(this).notify(alert.id.hashCode(), builder)
     }
 
@@ -427,6 +430,13 @@ class AlertMonitorService : Service() {
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasNotificationPermission(): Boolean {
+        val allowed = Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        if (!allowed) AppLogger.w(TAG, "Notification permission missing; cannot show alert notifications")
+        return allowed
+    }
 
     private fun RoadAlert.addressLine(): String =
         address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(Locale.US, latitude, longitude)
@@ -495,8 +505,8 @@ class AlertMonitorService : Service() {
         private const val MAX_NOTIFIED_IDS = 100
         private const val MAX_VISIBLE_CAR_NOTIFICATIONS = 3
         private const val MAX_CACHED_ALERTS = 200
-        private const val DISTANCE_UI_BUCKET_METERS = 100f
-        private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 12_000L
-        private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 30_000L
+        private const val DISTANCE_UI_BUCKET_METERS = 10f
+        private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 2_000L
+        private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 5_000L
     }
 }

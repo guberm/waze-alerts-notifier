@@ -51,6 +51,10 @@ class MainActivity : Activity() {
     private var statusText: String = "Refresh to load nearby alerts"
     private var countdownTimer: CountDownTimer? = null
     private var secondsToRefresh: Int = 0
+    private var refreshChipView: TextView? = null
+    private var nearestChipView: TextView? = null
+    private var nearestNavView: TextView? = null
+    private val alertDirectionViews = HashMap<String, TextView>()
 
     private val alertUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -74,6 +78,7 @@ class MainActivity : Activity() {
         activeAlerts = alertStore.activeAlerts()
         render()
         refreshAlerts()
+        ensureNotificationPermission()
         showChangelogIfUpdated()
     }
 
@@ -83,7 +88,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Android Auto alert notifications with live distance and direction\n• Google Maps navigation detection\n• Native notifications along the route\n• New radius slider steps\n• Live refresh timer\n• Background sync fixes")
+                .setMessage("• Smoother countdown and live distance updates\n• Direction and distance moved into an attached alert card\n• Android Auto alerts now use ongoing navigation notifications\n• Android Auto notifications no longer require Google Maps detection")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }
@@ -114,6 +119,10 @@ class MainActivity : Activity() {
     }
 
     private fun render() {
+        refreshChipView = null
+        nearestChipView = null
+        nearestNavView = null
+        alertDirectionViews.clear()
         palette = UiPalette.from(this, settings.themeMode)
         palette.applyWindow(this)
         root = LinearLayout(this).apply {
@@ -182,11 +191,15 @@ class MainActivity : Activity() {
         }
         row.addView(chip("Radius ${formatRadius(settings.radiusMeters)}", 0x22FFFFFF, 0xFFFFFFFF.toInt()))
         val refreshLabel = if (secondsToRefresh > 0) "${secondsToRefresh}s to next" else formatRefresh(settings.pollIntervalMillis)
-        row.addView(chip(refreshLabel, 0x22FFFFFF, 0xFFFFFFFF.toInt()))
+        refreshChipView = chip(refreshLabel, 0x22FFFFFF, 0xFFFFFFFF.toInt())
+        row.addView(refreshChipView)
         row.addView(chip("${activeAlerts.size} active", 0x22FFFFFF, 0xFFFFFFFF.toInt()))
         if (settings.mapsNavigationActive) {
             val nearest = displayAlerts().minByOrNull { it.distanceMeters }
-            if (nearest != null) row.addView(chip("Nearest ${formatDistance(nearest.distanceMeters)}", 0x33FFCA5C, 0xFFFFFFFF.toInt()))
+            if (nearest != null) {
+                nearestChipView = chip("Nearest ${formatDistanceTo(nearest)}", 0x33FFCA5C, 0xFFFFFFFF.toInt())
+                row.addView(nearestChipView)
+            }
         }
         return row
     }
@@ -257,6 +270,32 @@ class MainActivity : Activity() {
     private fun alertCard(alert: RoadAlert): LinearLayout {
         val muted = alertStore.isMuted(alert.id)
         return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+
+            addView(alertDirectionCard(alert), LinearLayout.LayoutParams(78.dp, LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                setMargins(0, 0, 8.dp, 0)
+            })
+            addView(alertMainCard(alert, muted), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+    }
+
+    private fun alertDirectionCard(alert: RoadAlert): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(8.dp, 8.dp, 8.dp, 8.dp)
+            background = rounded(if (alert.distanceMeters <= 500f) 0x22D77474 else palette.accentSoft, palette.border)
+            val directionText = text(directionDistanceLine(alert), 19f, if (alert.distanceMeters <= 500f) palette.danger else palette.title, bold = true).apply {
+                gravity = Gravity.CENTER
+                maxLines = 2
+            }
+            alertDirectionViews[alert.id] = directionText
+            addView(directionText, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+
+    private fun alertMainCard(alert: RoadAlert, muted: Boolean): LinearLayout =
+        LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(15.dp, 13.dp, 15.dp, 13.dp)
             background = rounded(if (muted) palette.mutedSurface else palette.surface, palette.border)
@@ -269,7 +308,6 @@ class MainActivity : Activity() {
                 setMargins(0, 0, 10.dp, 0)
             })
             top.addView(text(alert.title, 17f, palette.title, bold = true), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            top.addView(chip(directionDistanceLine(alert), if (alert.distanceMeters <= 500f) 0x22D77474 else palette.accentSoft, if (alert.distanceMeters <= 500f) palette.danger else palette.title))
             addView(top)
 
             addView(text(alert.address ?: coordinateLabel(alert), 13f, palette.body), blockParams(top = 9.dp))
@@ -298,7 +336,6 @@ class MainActivity : Activity() {
             })
             addView(actions)
         }
-    }
 
     private fun sliderRow(
         label: String,
@@ -377,12 +414,11 @@ class MainActivity : Activity() {
             override fun onTick(millisUntilFinished: Long) {
                 val nextSeconds = (millisUntilFinished / 1000).toInt()
                 val shouldRender = secondsToRefresh == 0 ||
-                    nextSeconds % 10 == 0 ||
+                    nextSeconds != secondsToRefresh ||
                     nextSeconds <= 5
                 secondsToRefresh = nextSeconds
                 if (shouldRender) {
-                    // Post to avoid calling setContentView() during an in-flight layout traversal
-                    window.decorView.post { if (!isFinishing) render() }
+                    window.decorView.post { if (!isFinishing) updateDynamicLabels() }
                 }
             }
             override fun onFinish() {
@@ -402,6 +438,14 @@ class MainActivity : Activity() {
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+        }
+    }
 
     private fun requestLocationPermissions() {
         val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -452,8 +496,9 @@ class MainActivity : Activity() {
             }
 
             val nearest = displayAlerts().minByOrNull { it.distanceMeters }
-            val nearestText = if (nearest != null) "Nearest alert: ${formatDistance(nearest.distanceMeters)}" else "No alerts ahead"
-            addView(text(nearestText, 14f, if (nearest != null) palette.danger else palette.secondary, bold = nearest != null), blockParams(top = 6.dp))
+            val nearestText = if (nearest != null) "Nearest alert: ${formatDistanceTo(nearest)}" else "No alerts ahead"
+            nearestNavView = text(nearestText, 14f, if (nearest != null) palette.danger else palette.secondary, bold = nearest != null)
+            addView(nearestNavView, blockParams(top = 6.dp))
 
             val routeRow = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -522,6 +567,17 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun updateDynamicLabels() {
+        refreshChipView?.text = if (secondsToRefresh > 0) "${secondsToRefresh}s to next" else formatRefresh(settings.pollIntervalMillis)
+        val displayed = displayAlerts()
+        displayed.forEach { alert ->
+            alertDirectionViews[alert.id]?.text = directionDistanceLine(alert)
+        }
+        val nearest = displayed.minByOrNull { it.distanceMeters }
+        nearestChipView?.text = nearest?.let { "Nearest ${formatDistanceTo(it)}" } ?: ""
+        nearestNavView?.text = nearest?.let { "Nearest alert: ${formatDistanceTo(it)}" } ?: "No alerts ahead"
+    }
+
     private fun normalizeDegrees(degrees: Float): Float = (degrees + 360f) % 360f
 
     private fun relativeArrow(degrees: Float): String = when {
@@ -545,6 +601,15 @@ class MainActivity : Activity() {
 
     private fun formatDistance(meters: Float): String =
         if (meters >= 1000f) "${"%.1f".format(Locale.US, meters / 1000f)} km" else "${meters.toInt()} m"
+
+    private fun formatDistanceTo(alert: RoadAlert): String {
+        val current = currentLocation() ?: return formatDistance(alert.distanceMeters)
+        val target = Location("alert").apply {
+            latitude = alert.latitude
+            longitude = alert.longitude
+        }
+        return formatDistance(current.distanceTo(target))
+    }
 
     private fun bearingToDirection(degrees: Float): String {
         val dirs = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")

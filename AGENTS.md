@@ -1,13 +1,18 @@
 <claude-mem-context>
 # Memory Context
 
-# [Waze Alerts Notifier] recent context, 2026-04-30 5:41pm EDT
+# [Waze Alerts Notifier] recent context, 2026-05-01
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 12 obs (4,401t read) | 713,054t work | 99% savings
+Stats: refreshed manually from current repo work
+
+### May 1, 2026
+1972 🔴 v0.9.11 fixes jerky countdown and live distance UI updates by updating labels in place instead of rebuilding the full phone screen.
+1973 🔴 Phone alert arrow/distance now lives in a dedicated adjacent card aligned with the alert notification card height.
+1974 🔴 Android Auto alert notifications now post as ongoing navigation-category car notifications and are no longer gated by Google Maps navigation detection.
 
 ### Apr 30, 2026
 1943 1:57p 🔴 Direction arrow missing in phone UI alert chips
