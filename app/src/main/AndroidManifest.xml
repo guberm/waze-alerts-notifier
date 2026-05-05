@@ -39,6 +39,10 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <receiver
+            android:name=".monitor.NotificationActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".monitor.MapsNavigationListener"
             android:exported="true"

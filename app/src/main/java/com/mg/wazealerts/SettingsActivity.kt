@@ -218,6 +218,31 @@ class SettingsActivity : Activity() {
                     currentFocus?.clearFocus()
                 }
             }, blockParams(top = 8.dp))
+
+            addView(text("FlareSolverr URL", 14f, palette.body), blockParams(top = 14.dp))
+            addView(text("Proxy server to bypass Waze bot-detection (e.g. http://your-server:8191)", 12f, palette.secondary), blockParams(top = 2.dp))
+            val flareSolverrField = EditText(this@SettingsActivity).apply {
+                setText(settings.flareSolverrUrl)
+                hint = "http://your-server:8191"
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                setSingleLine(true)
+                setTextColor(palette.title)
+                setHintTextColor(palette.secondary)
+                background = rounded(palette.surface, palette.border)
+                setPadding(12.dp, 8.dp, 12.dp, 8.dp)
+                setOnFocusChangeListener { _, hasFocus ->
+                    if (!hasFocus) settings.flareSolverrUrl = text.toString()
+                }
+            }
+            addView(flareSolverrField, blockParams(top = 6.dp))
+            addView(Button(this@SettingsActivity).apply {
+                text = "Save proxy URL"
+                palette.styleButton(this)
+                setOnClickListener {
+                    settings.flareSolverrUrl = flareSolverrField.text.toString()
+                    currentFocus?.clearFocus()
+                }
+            }, blockParams(top = 8.dp))
         })
     }
 

@@ -1,6 +1,7 @@
 package com.mg.wazealerts.source
 
 import android.location.Location
+import com.mg.wazealerts.AppLogger
 import com.mg.wazealerts.model.AlertKind
 import com.mg.wazealerts.model.RoadAlert
 import com.mg.wazealerts.settings.AppSettings
@@ -8,13 +9,16 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.util.Locale
 import kotlin.math.cos
 
 class WazeLiveMapAlertProvider : AlertProvider {
     override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.wazeLiveMapEnabled) return emptyList()
+
+        val flareSolverrUrl = settings.flareSolverrUrl
+        val viaProxy = flareSolverrUrl.isNotBlank()
+        AppLogger.d(TAG, "Fetching alerts via ${if (viaProxy) "FlareSolverr ($flareSolverrUrl)" else "direct"}")
 
         return runCatching {
             val bbox = boundingBox(location.latitude, location.longitude, radiusMeters)
@@ -27,8 +31,13 @@ class WazeLiveMapAlertProvider : AlertProvider {
                     "&env=${environmentFor(location.latitude, location.longitude)}" +
                     "&types=alerts"
             )
-            fetch(url).toAlerts(location, radiusMeters)
-        }.getOrElse {
+            AppLogger.d(TAG, "Request URL: $url")
+            val json = if (viaProxy) fetchViaFlareSolverr(url, flareSolverrUrl) else fetch(url)
+            val alerts = json.toAlerts(location, radiusMeters)
+            AppLogger.i(TAG, "Got ${alerts.size} alerts (radius=${radiusMeters}m)")
+            alerts
+        }.getOrElse { e ->
+            AppLogger.e(TAG, "Fetch failed [${if (viaProxy) "FlareSolverr" else "direct"}]: ${e.javaClass.simpleName}: ${e.message}")
             emptyList()
         }
     }
@@ -46,9 +55,43 @@ class WazeLiveMapAlertProvider : AlertProvider {
 
         try {
             val code = connection.responseCode
+            AppLogger.d(TAG, "Direct HTTP response: $code")
             if (code !in 200..299) throw IOException("Waze Live Map returned HTTP $code")
             val body = connection.inputStream.bufferedReader().use { it.readText() }
             return JSONObject(body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchViaFlareSolverr(targetUrl: URL, baseUrl: String): JSONObject {
+        val solverUrl = URL("$baseUrl/v1")
+        AppLogger.d(TAG, "Posting to FlareSolverr: $solverUrl")
+        val payload = JSONObject().apply {
+            put("cmd", "request.get")
+            put("url", targetUrl.toString())
+            put("session", SESSION_ID)
+            put("maxTimeout", 60_000)
+        }
+        val connection = (solverUrl.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 70_000
+            readTimeout = 70_000
+            requestMethod = "POST"
+            setRequestProperty("Content-Type", "application/json")
+            doOutput = true
+        }
+        try {
+            connection.outputStream.bufferedWriter().use { it.write(payload.toString()) }
+            val code = connection.responseCode
+            AppLogger.d(TAG, "FlareSolverr HTTP response: $code")
+            if (code !in 200..299) throw IOException("FlareSolverr returned HTTP $code")
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val response = JSONObject(body)
+            val status = response.optString("status")
+            AppLogger.d(TAG, "FlareSolverr status: $status, message: ${response.optString("message")}")
+            if (status != "ok") throw IOException("FlareSolverr: ${response.optString("message")}")
+            val solutionBody = response.getJSONObject("solution").getString("response")
+            return JSONObject(solutionBody)
         } finally {
             connection.disconnect()
         }
@@ -159,6 +202,8 @@ class WazeLiveMapAlertProvider : AlertProvider {
     )
 
     companion object {
+        private const val TAG = "WazeLiveMap"
+        private const val SESSION_ID = "waze-session"
         private const val METERS_PER_DEGREE_LAT = 111_320.0
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Mobile Safari/537.36"

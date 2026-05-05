@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.12` / `versionCode 22`
+- Current app version: `0.9.13` / `versionCode 23`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -30,13 +30,14 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance UI updates without full-screen rerenders, moves phone arrow/distance into an adjacent same-height card, and posts Android Auto alerts as ongoing navigation-category car notifications independent of Google Maps detection.
 - Release `0.9.12` moves the Controls panel (scan radius and refresh cadence sliders) from `MainActivity` to `SettingsActivity`, and fixes Android Auto notification delivery by switching from `CarAppExtender`/`CarNotificationManager` (which require a registered `CarAppService`) to `MessagingStyle` with `CATEGORY_MESSAGE`.
+- Release `0.9.13` adds FlareSolverr proxy support to `WazeLiveMapAlertProvider` to bypass Cloudflare/bot-detection on the Waze Live Map API; fixes Android Auto `MessagingStyle` notifications not appearing by adding a required `RemoteInput` reply action via `NotificationActionReceiver`; adds full error logging to `WazeLiveMapAlertProvider` so Waze fetch failures are visible in the in-app log.
 - `MainActivity` keeps the screen awake while the phone dashboard is open.
 - `MapsNavigationListener` detects active Google Maps navigation notifications; route alerts are approximated around the live device position because Google Maps does not expose third-party route geometry.
 - Alert data is intentionally behind `AlertProvider`.
 - `AlertRepository` enriches provider alerts with reverse-geocoded addresses before display.
 - `AlertStore` persists the latest visible active alerts, a short-lived wider movement cache, muted alert IDs, and passed alert IDs.
 - Movement-cache defaults live in `AppSettings`: 20 minutes, 15 km minimum cache radius, 50 km maximum cache radius, 5x radius expansion, and 24 visible alerts.
-- `WazeLiveMapAlertProvider` calls the unofficial Waze Live Map GeoRSS endpoint with radius-derived bbox and `na`/`il`/`row` environment selection.
+- `WazeLiveMapAlertProvider` calls the unofficial Waze Live Map GeoRSS endpoint with radius-derived bbox and `na`/`il`/`row` environment selection. Supports optional routing through a FlareSolverr proxy (configured via `AppSettings.flareSolverrUrl`) to bypass bot-detection; falls back to direct fetch when URL is blank. All fetch errors are logged via `AppLogger`.
 - `OpenStreetMapCameraProvider` calls Overpass API for fixed speed/red-light camera data from OpenStreetMap tags and caps searches at 25 km.
 - `TomTomTrafficAlertProvider` calls TomTom Traffic API v5 when a user saves a TomTom API key.
 - `DemoAlertProvider` generates local test alerts and is off by default for new installs.

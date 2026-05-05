@@ -37,6 +37,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
 import androidx.core.app.Person
+import androidx.core.app.RemoteInput
 import com.mg.wazealerts.AppLogger
 import java.util.Locale
 
@@ -364,12 +365,27 @@ class AlertMonitorService : Service() {
             .setConversationTitle(alert.title)
             .setGroupConversation(false)
             .addMessage(text, System.currentTimeMillis(), sender)
+        val replyFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+        val replyIntent = PendingIntent.getBroadcast(
+            this,
+            alert.id.hashCode(),
+            Intent(this, NotificationActionReceiver::class.java).setAction(ACTION_REPLY),
+            replyFlags
+        )
+        val replyAction = NotificationCompat.Action.Builder(R.mipmap.ic_launcher, "Reply", replyIntent)
+            .addRemoteInput(RemoteInput.Builder(KEY_REPLY).setLabel("Reply").build())
+            .setAllowGeneratedReplies(true)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+            .setShowsUserInterface(false)
+            .build()
         val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(alert.title)
             .setContentText(text)
             .setStyle(style)
             .setContentIntent(wazeIntent(alert))
+            .addAction(replyAction)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -499,5 +515,7 @@ class AlertMonitorService : Service() {
         private const val DISTANCE_UI_BUCKET_METERS = 10f
         private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 2_000L
         private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 5_000L
+        private const val ACTION_REPLY = "com.mg.wazealerts.ACTION_REPLY"
+        private const val KEY_REPLY = "key_reply"
     }
 }
