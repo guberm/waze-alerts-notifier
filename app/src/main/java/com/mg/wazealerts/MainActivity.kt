@@ -87,7 +87,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Waze XHR interception added (georss timeout fix)\n• Default navigation app setting in Settings (Google Maps / Waze)\n• Notification tap now opens the app instead of Waze navigation\n• FlareSolverr removed from Settings")
+                .setMessage("• Waze georss fix: env=il empty init response no longer poisons cache\n• Waze XHR interception + warmup URL fix\n• Default navigation app setting (Google Maps / Waze)\n• Notification tap opens app (Android Auto fix)")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }

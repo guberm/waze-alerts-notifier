@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.22` / `versionCode 32`
+- Current app version: `0.9.23` / `versionCode 33`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -35,6 +35,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.19` reverts to JS fetch inside WebView but with bare `fetch(url)` — no explicit headers. `Referer` is a forbidden header that the browser rejects when set manually; prior versions were likely triggering that. Same-origin request; cookies included by default.
 - Release `0.9.18` switches `WazeWebViewFetcher` from injected JS `fetch()` to direct HTTP with cookies extracted via `CookieManager.getInstance().getCookie("https://www.waze.com")` after warmup; logs cookie availability.
 - Release `0.9.17` fixes `WazeWebViewFetcher` cookie timing: debounces `onPageFinished` (800ms after last redirect) and extends JS init wait to 5s so Waze session cookies are fully set before the georss fetch.
+- Release `0.9.23` fixes `WazeWebViewFetcher` env=il cache poisoning: the URL is now passed as a second arg to `WazeAndroid.onResult()`; the bridge discards any response where the URL contains `env=il` (Waze's zero-bbox init call that always returns empty data and was being cached as the warmup response).
 - Release `0.9.22` adds XHR monkey-patching to `WazeWebViewFetcher` (Waze uses XHR not fetch for georss); fixes warmup URL (plain `waze.com/live-map/` without `?ll=` to avoid redirect); notification tap now opens `MainActivity` instead of Waze navigation (fixes Android Auto delivery); adds default navigation app setting (`AppSettings.navApp`, Google Maps default); removes FlareSolverr UI from `SettingsActivity`.
 - Release `0.9.16` replaces FlareSolverr as the default Waze fetch method with a `WazeWebViewFetcher`: a hidden `WebView` that loads `waze.com/live-map/`, waits 2 s for JS cookies to be set, then executes `fetch()` from within the browser context via `evaluateJavascript` + `@JavascriptInterface`; FlareSolverr remains available if a URL is configured. `WazeLiveMapAlertProvider` now takes `Context`; `AlertRepository` exposes `destroy()` which is called from `AlertMonitorService.onDestroy()`.
 - Release `0.9.15` adds FlareSolverr session warmup: before the first API call, loads `waze.com/live-map/` via the same session to establish Waze cookies; resets warmup flag on HTML response so the next cycle retries; logs first 300 chars of solution body for diagnosis.

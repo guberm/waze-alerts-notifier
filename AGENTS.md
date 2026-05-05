@@ -1,11 +1,10 @@
 <claude-mem-context>
 # Memory Context
 
-# [Waze Alerts Notifier] recent context, 2026-05-01 10:53am EDT
+# [Waze Alerts Notifier] recent context, 2026-05-05
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
-Fetch details: get_observations([IDs]) | Search: mem-search skill
 
 Stats: 17 obs (6,382t read) | 893,242t work | 99% savings
 
@@ -28,6 +27,12 @@ Stats: 17 obs (6,382t read) | 893,242t work | 99% savings
 1986 " 🟣 Countdown timer updates every second via label patching instead of full re-render
 1987 " 🔴 Android Auto notifications now fire without requiring active navigation state
 1984 8:01a 🔵 Waze Alerts Notifier — Codebase Audit for 3 Active Bugs (v0.8.0)
+
+### May 5, 2026
+2010 " ✅ Released v0.9.22: XHR georss interception, warmup URL fix, notification tap opens app, nav app setting, FlareSolverr removed from Settings
+2011 " 🔴 env=il cache poisoning: Waze init call with zero bbox cached as warmup response, poisoning all real env=na fetches with empty data
+2012 " 🔴 Fixed: URL passed to onResult bridge, env=il responses discarded in JsBridge
+2013 " ✅ Released v0.9.23: env=il cache poison fix
 
 Access 893k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
