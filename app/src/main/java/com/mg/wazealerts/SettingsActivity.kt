@@ -61,6 +61,7 @@ class SettingsActivity : Activity() {
         header()
         appearancePanel()
         controlsPanel()
+        navigationPanel()
         sourcesPanel()
         behaviorPanel()
         cachePanel()
@@ -182,6 +183,29 @@ class SettingsActivity : Activity() {
         })
     }
 
+    private fun navigationPanel() {
+        root.addView(panel {
+            addView(sectionHeader("Navigation", "App to open when navigating to an alert."))
+            val row = LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            listOf("google_maps" to "Google Maps", "waze" to "Waze").forEachIndexed { i, (key, label) ->
+                row.addView(Button(this@SettingsActivity).apply {
+                    text = label
+                    palette.styleButton(this, selected = settings.navApp == key, compact = true)
+                    setOnClickListener {
+                        settings.navApp = key
+                        render()
+                    }
+                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    if (i == 0) setMargins(0, 0, 8.dp, 0)
+                })
+            }
+            addView(row, blockParams(top = 8.dp))
+        })
+    }
+
     private fun sourcesPanel() {
         root.addView(panel {
             addView(sectionHeader("Sources", "Choose live feeds and fallbacks for active alerts."))
@@ -219,30 +243,6 @@ class SettingsActivity : Activity() {
                 }
             }, blockParams(top = 8.dp))
 
-            addView(text("FlareSolverr URL", 14f, palette.body), blockParams(top = 14.dp))
-            addView(text("Proxy server to bypass Waze bot-detection (e.g. http://your-server:8191)", 12f, palette.secondary), blockParams(top = 2.dp))
-            val flareSolverrField = EditText(this@SettingsActivity).apply {
-                setText(settings.flareSolverrUrl)
-                hint = "http://your-server:8191"
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-                setSingleLine(true)
-                setTextColor(palette.title)
-                setHintTextColor(palette.secondary)
-                background = rounded(palette.surface, palette.border)
-                setPadding(12.dp, 8.dp, 12.dp, 8.dp)
-                setOnFocusChangeListener { _, hasFocus ->
-                    if (!hasFocus) settings.flareSolverrUrl = text.toString()
-                }
-            }
-            addView(flareSolverrField, blockParams(top = 6.dp))
-            addView(Button(this@SettingsActivity).apply {
-                text = "Save proxy URL"
-                palette.styleButton(this)
-                setOnClickListener {
-                    settings.flareSolverrUrl = flareSolverrField.text.toString()
-                    currentFocus?.clearFocus()
-                }
-            }, blockParams(top = 8.dp))
         })
     }
 

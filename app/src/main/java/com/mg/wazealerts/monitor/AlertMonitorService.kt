@@ -385,7 +385,7 @@ class AlertMonitorService : Service() {
             .setContentTitle(alert.title)
             .setContentText(text)
             .setStyle(style)
-            .setContentIntent(wazeIntent(alert))
+            .setContentIntent(contentIntent())
             .addAction(replyAction)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)

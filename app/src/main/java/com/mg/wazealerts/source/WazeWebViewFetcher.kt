@@ -60,8 +60,7 @@ class WazeWebViewFetcher(context: Context) {
             lastCapturedResponse = null
 
             withContext(Dispatchers.Main) {
-                // Load with our coordinates so Waze centers on the right area
-                val pageUrl = "https://www.waze.com/live-map/?ll=$lat,$lng"
+                val pageUrl = "https://www.waze.com/live-map/"
                 AppLogger.i(TAG, "Initializing WebView — loading $pageUrl")
 
                 val wv = webView ?: WebView(appContext).also { webView = it }
@@ -164,8 +163,7 @@ class WazeWebViewFetcher(context: Context) {
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
 
-        // Monkey-patches window.fetch to forward georss responses to the Android bridge.
-        // Waze's own authenticated fetch calls succeed; we just eavesdrop on the response.
+        // Monkey-patches window.fetch AND XMLHttpRequest to forward georss responses to the Android bridge.
         private const val INTERCEPTOR_SCRIPT = """
 (function() {
     if (window._wazeIntercepted) return;
@@ -184,6 +182,21 @@ class WazeWebViewFetcher(context: Context) {
             }).catch(function(){});
         }
         return p;
+    };
+    var _origOpen = XMLHttpRequest.prototype.open;
+    var _origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(method, url) {
+        this._waze_url = (typeof url === 'string') ? url : '';
+        return _origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function() {
+        if (this._waze_url && this._waze_url.indexOf('georss') !== -1) {
+            var xhr = this;
+            this.addEventListener('load', function() {
+                if (xhr.status === 200 && window.WazeAndroid) window.WazeAndroid.onResult(xhr.responseText);
+            });
+        }
+        return _origSend.apply(this, arguments);
     };
 })();
 """

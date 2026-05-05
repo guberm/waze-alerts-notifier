@@ -87,7 +87,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Radius and refresh controls moved to Settings\n• Android Auto notifications now use MessagingStyle for reliable delivery")
+                .setMessage("• Waze XHR interception added (georss timeout fix)\n• Default navigation app setting in Settings (Google Maps / Waze)\n• Notification tap now opens the app instead of Waze navigation\n• FlareSolverr removed from Settings")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }
@@ -354,9 +354,11 @@ class MainActivity : Activity() {
     }
 
     private fun openNavigation(alert: RoadAlert) {
-        val uri = Uri.parse(
-            "https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&navigate=yes&z=10&utm_source=$packageName"
-        )
+        val uri = if (settings.navApp == "waze") {
+            Uri.parse("https://waze.com/ul?ll=${alert.latitude},${alert.longitude}&navigate=yes&z=10&utm_source=$packageName")
+        } else {
+            Uri.parse("google.navigation:q=${alert.latitude},${alert.longitude}&mode=d")
+        }
         startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 

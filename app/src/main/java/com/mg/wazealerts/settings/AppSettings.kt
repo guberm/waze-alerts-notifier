@@ -37,6 +37,10 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_FLARESOLVERR_URL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_FLARESOLVERR_URL, value.trim().trimEnd('/')).apply()
 
+    var navApp: String
+        get() = prefs.getString(KEY_NAV_APP, "google_maps") ?: "google_maps"
+        set(value) = prefs.edit().putString(KEY_NAV_APP, value).apply()
+
     var radiusMeters: Int
         get() = prefs.getInt(KEY_RADIUS_METERS, 3000)
         set(value) = prefs.edit().putInt(KEY_RADIUS_METERS, value.coerceIn(100, 50000)).apply()
@@ -138,6 +142,7 @@ class AppSettings(context: Context) {
         private const val KEY_OSM_CAMERAS = "osm_cameras_enabled"
         private const val KEY_TOMTOM_API_KEY = "tomtom_api_key"
         private const val KEY_FLARESOLVERR_URL = "flaresolverr_url"
+        private const val KEY_NAV_APP = "nav_app"
         private const val KEY_RADIUS_METERS = "radius_meters"
         private const val KEY_POLL_INTERVAL = "poll_interval_millis"
         private const val KEY_ALERT_CACHE_TTL_MINUTES = "alert_cache_ttl_minutes"
