@@ -13,6 +13,8 @@ import java.util.Locale
 import kotlin.math.cos
 
 class WazeLiveMapAlertProvider : AlertProvider {
+    private var sessionWarmedUp = false
+
     override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.wazeLiveMapEnabled) return emptyList()
 
@@ -38,6 +40,7 @@ class WazeLiveMapAlertProvider : AlertProvider {
             alerts
         }.getOrElse { e ->
             AppLogger.e(TAG, "Fetch failed [${if (viaProxy) "FlareSolverr" else "direct"}]: ${e.javaClass.simpleName}: ${e.message}")
+            if (viaProxy && e is org.json.JSONException) sessionWarmedUp = false
             emptyList()
         }
     }
@@ -64,7 +67,39 @@ class WazeLiveMapAlertProvider : AlertProvider {
         }
     }
 
+    private fun warmupFlareSolverrSession(baseUrl: String) {
+        AppLogger.i(TAG, "Warming up FlareSolverr session via waze.com/live-map/")
+        val payload = JSONObject().apply {
+            put("cmd", "request.get")
+            put("url", "https://www.waze.com/live-map/")
+            put("session", SESSION_ID)
+            put("maxTimeout", 60_000)
+        }
+        val connection = (URL("$baseUrl/v1").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 70_000
+            readTimeout = 70_000
+            requestMethod = "POST"
+            setRequestProperty("Content-Type", "application/json")
+            doOutput = true
+        }
+        try {
+            connection.outputStream.bufferedWriter().use { it.write(payload.toString()) }
+            val code = connection.responseCode
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val status = runCatching { JSONObject(body).optString("status") }.getOrDefault("?")
+            AppLogger.i(TAG, "Warmup response: HTTP $code, status=$status")
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "Warmup failed: ${e.message}")
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun fetchViaFlareSolverr(targetUrl: URL, baseUrl: String): JSONObject {
+        if (!sessionWarmedUp) {
+            warmupFlareSolverrSession(baseUrl)
+            sessionWarmedUp = true
+        }
         val solverUrl = URL("$baseUrl/v1")
         AppLogger.d(TAG, "Posting to FlareSolverr: $solverUrl")
         val payload = JSONObject().apply {
@@ -91,6 +126,7 @@ class WazeLiveMapAlertProvider : AlertProvider {
             AppLogger.d(TAG, "FlareSolverr status: $status, message: ${response.optString("message")}")
             if (status != "ok") throw IOException("FlareSolverr: ${response.optString("message")}")
             val solutionBody = response.getJSONObject("solution").getString("response")
+            AppLogger.d(TAG, "Solution body preview: ${solutionBody.take(300)}")
             return JSONObject(solutionBody)
         } finally {
             connection.disconnect()
