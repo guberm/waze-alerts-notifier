@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.webkit.JavascriptInterface
+import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.mg.wazealerts.AppLogger
@@ -16,7 +16,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.io.IOException
-import java.util.concurrent.atomic.AtomicReference
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -25,21 +26,6 @@ class WazeWebViewFetcher(context: Context) {
     @Volatile private var webView: WebView? = null
     @Volatile private var pageReady = false
     private val initMutex = Mutex()
-    private val pendingResult = AtomicReference<CompletableDeferred<String>?>()
-
-    inner class JsBridge {
-        @JavascriptInterface
-        fun onResult(json: String) {
-            AppLogger.d(TAG, "JS result received (${json.length} chars)")
-            pendingResult.get()?.complete(json)
-        }
-
-        @JavascriptInterface
-        fun onError(msg: String) {
-            AppLogger.e(TAG, "JS fetch error: $msg")
-            pendingResult.get()?.completeExceptionally(IOException("JS fetch error: $msg"))
-        }
-    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private suspend fun ensureReady() {
@@ -55,13 +41,13 @@ class WazeWebViewFetcher(context: Context) {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.userAgentString = USER_AGENT
-                    addJavascriptInterface(JsBridge(), "WazeAndroid")
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                 }
                 var debounceRunnable: Runnable? = null
                 wv.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         AppLogger.i(TAG, "Page finished: $url")
-                        // Debounce: SPA has multiple redirect hops; complete 800ms after the last one
                         debounceRunnable?.let { mainHandler.removeCallbacks(it) }
                         debounceRunnable = Runnable {
                             if (!initDeferred.isCompleted) initDeferred.complete(Unit)
@@ -84,34 +70,33 @@ class WazeWebViewFetcher(context: Context) {
     suspend fun fetch(url: String): String {
         ensureReady()
 
-        val deferred = CompletableDeferred<String>()
-        pendingResult.set(deferred)
-
-        withContext(Dispatchers.Main) {
-            val wv = webView ?: throw IOException("WebView not available")
-            val escapedUrl = url.replace("'", "\\'")
-            AppLogger.d(TAG, "Executing JS fetch: $escapedUrl")
-            wv.evaluateJavascript("""
-                (function() {
-                    fetch('$escapedUrl', {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: {
-                            'Accept': 'application/json, text/plain, */*',
-                            'Referer': 'https://www.waze.com/live-map/'
-                        }
-                    })
-                    .then(function(r) {
-                        if (!r.ok) { WazeAndroid.onError('HTTP ' + r.status); return; }
-                        return r.text();
-                    })
-                    .then(function(t) { if (t) WazeAndroid.onResult(t); })
-                    .catch(function(e) { WazeAndroid.onError(e.message || String(e)); });
-                })();
-            """.trimIndent(), null)
+        // Extract cookies Waze set during WebView warmup, then use them in a direct HTTP call
+        val cookies = withContext(Dispatchers.Main) {
+            CookieManager.getInstance().getCookie("https://www.waze.com")
         }
+        AppLogger.d(TAG, "Cookies: ${if (cookies.isNullOrBlank()) "none" else "${cookies.length} chars"}")
 
-        return withTimeout(30_000) { deferred.await() }
+        return withContext(Dispatchers.IO) {
+            val conn = URL(url).openConnection() as HttpsURLConnection
+            try {
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 15_000
+                conn.setRequestProperty("User-Agent", USER_AGENT)
+                conn.setRequestProperty("Accept", "application/json, text/plain, */*")
+                conn.setRequestProperty("Referer", "https://www.waze.com/live-map/")
+                conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+                if (!cookies.isNullOrBlank()) {
+                    conn.setRequestProperty("Cookie", cookies)
+                }
+                val code = conn.responseCode
+                AppLogger.d(TAG, "Direct HTTP response: $code")
+                if (code != 200) throw IOException("HTTP $code")
+                conn.inputStream.bufferedReader().readText()
+            } finally {
+                conn.disconnect()
+            }
+        }
     }
 
     fun invalidate() {
