@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.19` / `versionCode 29`
+- Current app version: `0.9.20` / `versionCode 30`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -30,6 +30,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance UI updates without full-screen rerenders, moves phone arrow/distance into an adjacent same-height card, and posts Android Auto alerts as ongoing navigation-category car notifications independent of Google Maps detection.
 - Release `0.9.12` moves the Controls panel (scan radius and refresh cadence sliders) from `MainActivity` to `SettingsActivity`, and fixes Android Auto notification delivery by switching from `CarAppExtender`/`CarNotificationManager` (which require a registered `CarAppService`) to `MessagingStyle` with `CATEGORY_MESSAGE`.
+- Release `0.9.20` switches from JS `fetch()` injection to WebView top-level navigation (`loadUrl(georssUrl)` after warmup). Navigation requests send `Sec-Fetch-Mode: navigate` instead of `cors`, bypassing XHR-targeted bot protection. Also adds `shouldInterceptRequest` logging to detect any native Waze georss calls during warmup.
 - Release `0.9.19` reverts to JS fetch inside WebView but with bare `fetch(url)` — no explicit headers. `Referer` is a forbidden header that the browser rejects when set manually; prior versions were likely triggering that. Same-origin request; cookies included by default.
 - Release `0.9.18` switches `WazeWebViewFetcher` from injected JS `fetch()` to direct HTTP with cookies extracted via `CookieManager.getInstance().getCookie("https://www.waze.com")` after warmup; logs cookie availability.
 - Release `0.9.17` fixes `WazeWebViewFetcher` cookie timing: debounces `onPageFinished` (800ms after last redirect) and extends JS init wait to 5s so Waze session cookies are fully set before the georss fetch.
