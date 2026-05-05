@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.13` / `versionCode 23`.
+Current Android version: `0.9.14` / `versionCode 24`.
 
 ## GitHub Workflow
 
@@ -51,6 +51,7 @@ Current Android version: `0.9.13` / `versionCode 23`.
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance updates, moves phone arrow/distance into an adjacent same-height card, and improves Android Auto notification delivery by posting ongoing navigation-category car notifications without requiring Google Maps detection.
 - Release `0.9.12` moves Controls (scan radius and refresh cadence) from `MainActivity` to `SettingsActivity`, and fixes Android Auto by replacing `CarAppExtender`/`CarNotificationManager` with `MessagingStyle`+`CATEGORY_MESSAGE`; removes `androidx.car.app` dependency.
+- Release `0.9.14` adds `android:usesCleartextTraffic="true"` to fix Android blocking HTTP to FlareSolverr proxy.
 - Release `0.9.13` adds FlareSolverr proxy support in `WazeLiveMapAlertProvider` (configurable via Settings → Sources → FlareSolverr URL); fixes Android Auto `MessagingStyle` notifications by adding the required `RemoteInput` reply action (`NotificationActionReceiver`); adds `AppLogger` error logging to Waze fetch path.
 - `MainActivity` keeps the phone screen awake while the dashboard is open.
 - Google Maps navigation detection is notification-listener based. The app cannot read Google Maps route geometry, so route alerts are approximated by monitoring live device position while Maps navigation is active.
