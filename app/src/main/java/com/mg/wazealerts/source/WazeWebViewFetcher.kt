@@ -47,10 +47,16 @@ class WazeWebViewFetcher(context: Context) {
                 AppLogger.d(TAG, "Intercepted Waze georss response (${text.length} chars) env=na")
                 lastCapturedResponse = trimmed
                 lastCapturedAt = System.currentTimeMillis()
-                pendingResult.get()?.complete(trimmed)
+                pendingResult.getAndSet(null)?.complete(trimmed)
             } else {
                 AppLogger.e(TAG, "Waze georss response not JSON: ${trimmed.take(120)}")
             }
+        }
+
+        @JavascriptInterface
+        fun onFetchError(status: String, url: String) {
+            AppLogger.e(TAG, "Waze georss XHR error: HTTP $status — $url")
+            pendingResult.getAndSet(null)?.completeExceptionally(IOException("Waze georss HTTP $status"))
         }
     }
 
@@ -126,11 +132,17 @@ class WazeWebViewFetcher(context: Context) {
             return cached
         }
 
-        // Wait for the next intercepted Waze call
+        // Waze never makes an env=na call on its own — inject one using the live session
         val deferred = CompletableDeferred<String>()
         pendingResult.set(deferred)
+        withContext(Dispatchers.Main) {
+            val escapedUrl = url.replace("'", "\\'")
+            val js = "(function(){var x=new XMLHttpRequest();x.open('GET','$escapedUrl');x.send();})()"
+            AppLogger.d(TAG, "Injecting georss XHR: $url")
+            webView?.evaluateJavascript(js, null)
+        }
         return try {
-            withTimeout(30_000) { deferred.await() }
+            withTimeout(20_000) { deferred.await() }
         } catch (e: Exception) {
             throw IOException("Timed out waiting for Waze georss response")
         }
@@ -198,7 +210,14 @@ class WazeWebViewFetcher(context: Context) {
         if (this._waze_url && this._waze_url.indexOf('georss') !== -1) {
             var xhr = this;
             this.addEventListener('load', function() {
-                if (xhr.status === 200 && window.WazeAndroid) window.WazeAndroid.onResult(xhr.responseText, xhr._waze_url);
+                if (xhr.status === 200 && window.WazeAndroid) {
+                    window.WazeAndroid.onResult(xhr.responseText, xhr._waze_url);
+                } else if (xhr.status !== 200 && window.WazeAndroid) {
+                    window.WazeAndroid.onFetchError(String(xhr.status), xhr._waze_url);
+                }
+            });
+            this.addEventListener('error', function() {
+                if (window.WazeAndroid) window.WazeAndroid.onFetchError('network_error', xhr._waze_url);
             });
         }
         return _origSend.apply(this, arguments);
