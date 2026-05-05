@@ -36,10 +36,15 @@ class WazeWebViewFetcher(context: Context) {
 
     inner class JsBridge {
         @JavascriptInterface
-        fun onResult(text: String) {
+        fun onResult(text: String, url: String) {
+            // Skip Waze's own env=il zero-bbox initialization call — it always returns empty data
+            if (url.contains("env=il")) {
+                AppLogger.d(TAG, "Skipping env=il init response (${text.length} chars)")
+                return
+            }
             val trimmed = text.trim()
             if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                AppLogger.d(TAG, "Intercepted Waze georss response (${text.length} chars)")
+                AppLogger.d(TAG, "Intercepted Waze georss response (${text.length} chars) env=na")
                 lastCapturedResponse = trimmed
                 lastCapturedAt = System.currentTimeMillis()
                 pendingResult.get()?.complete(trimmed)
@@ -176,7 +181,7 @@ class WazeWebViewFetcher(context: Context) {
             p.then(function(r) {
                 if (r.ok) {
                     r.clone().text().then(function(t) {
-                        if (window.WazeAndroid) window.WazeAndroid.onResult(t);
+                        if (window.WazeAndroid) window.WazeAndroid.onResult(t, url);
                     });
                 }
             }).catch(function(){});
@@ -193,7 +198,7 @@ class WazeWebViewFetcher(context: Context) {
         if (this._waze_url && this._waze_url.indexOf('georss') !== -1) {
             var xhr = this;
             this.addEventListener('load', function() {
-                if (xhr.status === 200 && window.WazeAndroid) window.WazeAndroid.onResult(xhr.responseText);
+                if (xhr.status === 200 && window.WazeAndroid) window.WazeAndroid.onResult(xhr.responseText, xhr._waze_url);
             });
         }
         return _origSend.apply(this, arguments);
