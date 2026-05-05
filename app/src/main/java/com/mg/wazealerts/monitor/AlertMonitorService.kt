@@ -261,7 +261,7 @@ class AlertMonitorService : Service() {
         settings.alertCacheTtlMinutes * 60_000L
 
     private fun updatePassedAlerts(alerts: List<RoadAlert>, location: Location) {
-        if (!isMapsNavigating || settings.lastBearingDegrees < 0f) {
+        if (settings.lastBearingDegrees < 0f) {
             prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
             alerts.forEach { prevDistances[it.id] = it.distanceMeters }
             return
@@ -380,6 +380,16 @@ class AlertMonitorService : Service() {
             .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
             .setShowsUserInterface(false)
             .build()
+        val markReadIntent = PendingIntent.getBroadcast(
+            this,
+            alert.id.hashCode() + 1,
+            Intent(this, NotificationActionReceiver::class.java).setAction(ACTION_MARK_READ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val markReadAction = NotificationCompat.Action.Builder(R.mipmap.ic_launcher, "Mark as read", markReadIntent)
+            .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)
+            .setShowsUserInterface(false)
+            .build()
         val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(alert.title)
@@ -387,6 +397,7 @@ class AlertMonitorService : Service() {
             .setStyle(style)
             .setContentIntent(contentIntent())
             .addAction(replyAction)
+            .addAction(markReadAction)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -517,6 +528,7 @@ class AlertMonitorService : Service() {
         private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 2_000L
         private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 5_000L
         private const val ACTION_REPLY = "com.mg.wazealerts.ACTION_REPLY"
+        private const val ACTION_MARK_READ = "com.mg.wazealerts.ACTION_MARK_READ"
         private const val KEY_REPLY = "key_reply"
     }
 }

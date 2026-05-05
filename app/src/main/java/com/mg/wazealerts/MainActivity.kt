@@ -447,13 +447,13 @@ class MainActivity : Activity() {
 
     private fun displayAlerts(): List<RoadAlert> {
         val passed = alertStore.passedAlertIds()
-        return if (settings.mapsNavigationActive) {
-            activeAlerts
-                .filterNot { it.id in passed }
-                .let { list -> if (settings.routeFilterEnabled) list.filter { alertIsAhead(it) } else list }
-        } else {
-            activeAlerts
-        }
+        return activeAlerts
+            .filterNot { it.id in passed }
+            .let { list ->
+                if (settings.mapsNavigationActive && settings.routeFilterEnabled)
+                    list.filter { alertIsAhead(it) }
+                else list
+            }
     }
 
     private fun alertIsAhead(alert: RoadAlert): Boolean {
