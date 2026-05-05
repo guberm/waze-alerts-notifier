@@ -14,7 +14,7 @@ Debug APK:
 app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Current Android version: `0.9.15` / `versionCode 25`.
+Current Android version: `0.9.16` / `versionCode 26`.
 
 ## GitHub Workflow
 
@@ -51,6 +51,7 @@ Current Android version: `0.9.15` / `versionCode 25`.
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance updates, moves phone arrow/distance into an adjacent same-height card, and improves Android Auto notification delivery by posting ongoing navigation-category car notifications without requiring Google Maps detection.
 - Release `0.9.12` moves Controls (scan radius and refresh cadence) from `MainActivity` to `SettingsActivity`, and fixes Android Auto by replacing `CarAppExtender`/`CarNotificationManager` with `MessagingStyle`+`CATEGORY_MESSAGE`; removes `androidx.car.app` dependency.
+- Release `0.9.16` introduces `WazeWebViewFetcher`: hidden WebView that loads waze.com/live-map/, waits for JS cookies, then calls georss via JS fetch() from inside the browser context. WazeLiveMapAlertProvider now takes Context. AlertRepository.destroy() → AlertMonitorService.onDestroy(). FlareSolverr remains optional via flareSolverrUrl setting.
 - Release `0.9.15` adds FlareSolverr session warmup (loads waze.com/live-map/ first to establish cookies); resets warmup on HTML response; logs solution body preview.
 - Release `0.9.14` adds `android:usesCleartextTraffic="true"` to fix Android blocking HTTP to FlareSolverr proxy.
 - Release `0.9.13` adds FlareSolverr proxy support in `WazeLiveMapAlertProvider` (configurable via Settings → Sources → FlareSolverr URL); fixes Android Auto `MessagingStyle` notifications by adding the required `RemoteInput` reply action (`NotificationActionReceiver`); adds `AppLogger` error logging to Waze fetch path.

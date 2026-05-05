@@ -11,7 +11,7 @@ import java.util.Locale
 class AlertRepository(context: Context) {
     private val appContext = context.applicationContext
     private val demoProvider = DemoAlertProvider()
-    private val wazeProvider = WazeLiveMapAlertProvider()
+    private val wazeProvider = WazeLiveMapAlertProvider(context.applicationContext)
     private val tomTomProvider = TomTomTrafficAlertProvider()
     private val osmCameraProvider = OpenStreetMapCameraProvider(context.applicationContext)
 
@@ -56,6 +56,8 @@ class AlertRepository(context: Context) {
             null
         }
     }
+
+    fun destroy() = wazeProvider.destroy()
 
     private fun coordinateLabel(latitude: Double, longitude: Double): String =
         "%.5f, %.5f".format(Locale.US, latitude, longitude)

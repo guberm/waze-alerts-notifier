@@ -1,5 +1,6 @@
 package com.mg.wazealerts.source
 
+import android.content.Context
 import android.location.Location
 import com.mg.wazealerts.AppLogger
 import com.mg.wazealerts.model.AlertKind
@@ -12,38 +13,48 @@ import java.net.URL
 import java.util.Locale
 import kotlin.math.cos
 
-class WazeLiveMapAlertProvider : AlertProvider {
+class WazeLiveMapAlertProvider(context: Context) : AlertProvider {
+    private val fetcher = WazeWebViewFetcher(context)
     private var sessionWarmedUp = false
 
     override suspend fun alertsNear(location: Location, settings: AppSettings, radiusMeters: Int): List<RoadAlert> {
         if (!settings.wazeLiveMapEnabled) return emptyList()
 
         val flareSolverrUrl = settings.flareSolverrUrl
-        val viaProxy = flareSolverrUrl.isNotBlank()
-        AppLogger.d(TAG, "Fetching alerts via ${if (viaProxy) "FlareSolverr ($flareSolverrUrl)" else "direct"}")
+        val mode = when {
+            flareSolverrUrl.isNotBlank() -> "FlareSolverr"
+            else -> "WebView"
+        }
+        AppLogger.d(TAG, "Fetching alerts via $mode")
 
         return runCatching {
             val bbox = boundingBox(location.latitude, location.longitude, radiusMeters)
-            val url = URL(
-                "https://www.waze.com/live-map/api/georss" +
-                    "?top=${bbox.top}" +
-                    "&bottom=${bbox.bottom}" +
-                    "&left=${bbox.left}" +
-                    "&right=${bbox.right}" +
-                    "&env=${environmentFor(location.latitude, location.longitude)}" +
-                    "&types=alerts"
-            )
-            AppLogger.d(TAG, "Request URL: $url")
-            val json = if (viaProxy) fetchViaFlareSolverr(url, flareSolverrUrl) else fetch(url)
+            val urlStr = "https://www.waze.com/live-map/api/georss" +
+                "?top=${bbox.top}" +
+                "&bottom=${bbox.bottom}" +
+                "&left=${bbox.left}" +
+                "&right=${bbox.right}" +
+                "&env=${environmentFor(location.latitude, location.longitude)}" +
+                "&types=alerts"
+            AppLogger.d(TAG, "Request URL: $urlStr")
+            val json = when (mode) {
+                "FlareSolverr" -> fetchViaFlareSolverr(URL(urlStr), flareSolverrUrl)
+                else -> JSONObject(fetcher.fetch(urlStr))
+            }
             val alerts = json.toAlerts(location, radiusMeters)
-            AppLogger.i(TAG, "Got ${alerts.size} alerts (radius=${radiusMeters}m)")
+            AppLogger.i(TAG, "Got ${alerts.size} alerts via $mode (radius=${radiusMeters}m)")
             alerts
         }.getOrElse { e ->
-            AppLogger.e(TAG, "Fetch failed [${if (viaProxy) "FlareSolverr" else "direct"}]: ${e.javaClass.simpleName}: ${e.message}")
-            if (viaProxy && e is org.json.JSONException) sessionWarmedUp = false
+            AppLogger.e(TAG, "Fetch failed [$mode]: ${e.javaClass.simpleName}: ${e.message}")
+            when {
+                mode == "FlareSolverr" && e is org.json.JSONException -> sessionWarmedUp = false
+                mode == "WebView" -> fetcher.invalidate()
+            }
             emptyList()
         }
     }
+
+    fun destroy() = fetcher.destroy()
 
     private fun fetch(url: URL): JSONObject {
         val connection = (url.openConnection() as HttpURLConnection).apply {

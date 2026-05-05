@@ -121,6 +121,7 @@ class AlertMonitorService : Service() {
     override fun onDestroy() {
         fusedLocation.removeLocationUpdates(locationCallback)
         unregisterReceiver(navReceiver)
+        repository.destroy()
         scope.cancel()
         super.onDestroy()
     }
