@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.delay
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
@@ -106,8 +107,13 @@ class WazeWebViewFetcher(context: Context) {
                     override fun shouldInterceptRequest(
                         view: WebView, request: WebResourceRequest
                     ): WebResourceResponse? {
-                        if ("georss" in request.url.toString()) {
-                            AppLogger.i(TAG, "Waze native georss call: ${request.url}")
+                        val url = request.url.toString()
+                        if ("georss" in url) {
+                            val env = if ("env=il" in url) "env=il" else "env=na"
+                            val headers = request.requestHeaders
+                                ?.entries?.joinToString(", ") { "${it.key}: ${it.value}" }
+                                ?: "none"
+                            AppLogger.i(TAG, "Waze native $env call headers: $headers")
                         }
                         return null
                     }
@@ -132,19 +138,21 @@ class WazeWebViewFetcher(context: Context) {
             return cached
         }
 
-        // Waze never makes an env=na call on its own — inject one using the live session
+        // Queue the env=na fetch to fire after Waze's own env=il call completes.
+        // env=il sets session cookies the server requires for env=na — firing before it returns 403.
         val deferred = CompletableDeferred<String>()
         pendingResult.set(deferred)
         withContext(Dispatchers.Main) {
             val escapedUrl = url.replace("'", "\\'")
-            val js = "(function(){var x=new XMLHttpRequest();x.open('GET','$escapedUrl');x.send();})()"
-            AppLogger.d(TAG, "Injecting georss XHR: $url")
-            webView?.evaluateJavascript(js, null)
+            AppLogger.d(TAG, "Queuing georss fetch (fires after env=il): $url")
+            webView?.evaluateJavascript("window.wazeSetNaUrl && window.wazeSetNaUrl('$escapedUrl')", null)
         }
         return try {
             withTimeout(20_000) { deferred.await() }
-        } catch (e: Exception) {
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             throw IOException("Timed out waiting for Waze georss response")
+        } catch (e: Exception) {
+            throw IOException(e.message ?: "Waze georss fetch failed")
         }
     }
 
@@ -180,44 +188,61 @@ class WazeWebViewFetcher(context: Context) {
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
 
-        // Monkey-patches window.fetch AND XMLHttpRequest to forward georss responses to the Android bridge.
+        // Patches XHR to:
+        //  1. Skip env=il responses (Waze init call with zero bbox)
+        //  2. After env=il completes, fire the queued env=na request (cookies are now valid)
+        //  3. Forward env=na responses to the Android bridge
+        // wazeSetNaUrl() is called by Kotlin to queue the real area fetch.
         private const val INTERCEPTOR_SCRIPT = """
 (function() {
     if (window._wazeIntercepted) return;
     window._wazeIntercepted = true;
-    var _orig = window.fetch;
-    window.fetch = function(input, init) {
-        var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
-        var p = _orig.apply(this, arguments);
-        if (url.indexOf('georss') !== -1) {
-            p.then(function(r) {
-                if (r.ok) {
-                    r.clone().text().then(function(t) {
-                        if (window.WazeAndroid) window.WazeAndroid.onResult(t, url);
-                    });
-                }
-            }).catch(function(){});
-        }
-        return p;
-    };
+    window._wazeNaUrl = null;
+    window._wazeIlDone = false;
+
     var _origOpen = XMLHttpRequest.prototype.open;
     var _origSend = XMLHttpRequest.prototype.send;
+
     XMLHttpRequest.prototype.open = function(method, url) {
         this._waze_url = (typeof url === 'string') ? url : '';
         return _origOpen.apply(this, arguments);
     };
+
+    function doInject(naUrl) {
+        var x = new XMLHttpRequest();
+        x.open('GET', naUrl);
+        x.send();
+    }
+
+    window.wazeSetNaUrl = function(url) {
+        if (window._wazeIlDone) {
+            doInject(url);
+        } else {
+            window._wazeNaUrl = url;
+        }
+    };
+
     XMLHttpRequest.prototype.send = function() {
         if (this._waze_url && this._waze_url.indexOf('georss') !== -1) {
             var xhr = this;
+            var isIl = xhr._waze_url.indexOf('env=il') !== -1;
             this.addEventListener('load', function() {
-                if (xhr.status === 200 && window.WazeAndroid) {
-                    window.WazeAndroid.onResult(xhr.responseText, xhr._waze_url);
-                } else if (xhr.status !== 200 && window.WazeAndroid) {
-                    window.WazeAndroid.onFetchError(String(xhr.status), xhr._waze_url);
+                if (isIl) {
+                    if (xhr.status === 200) {
+                        window._wazeIlDone = true;
+                        var naUrl = window._wazeNaUrl;
+                        if (naUrl) { window._wazeNaUrl = null; doInject(naUrl); }
+                    }
+                } else {
+                    if (xhr.status === 200 && window.WazeAndroid) {
+                        window.WazeAndroid.onResult(xhr.responseText, xhr._waze_url);
+                    } else if (xhr.status !== 200 && window.WazeAndroid) {
+                        window.WazeAndroid.onFetchError(String(xhr.status), xhr._waze_url);
+                    }
                 }
             });
             this.addEventListener('error', function() {
-                if (window.WazeAndroid) window.WazeAndroid.onFetchError('network_error', xhr._waze_url);
+                if (!isIl && window.WazeAndroid) window.WazeAndroid.onFetchError('network_error', xhr._waze_url);
             });
         }
         return _origSend.apply(this, arguments);
