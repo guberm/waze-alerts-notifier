@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.16` / `versionCode 26`
+- Current app version: `0.9.17` / `versionCode 27`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -30,6 +30,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.10` removes the Android Auto media-player surface, keeps Android Auto alert delivery notification-only, updates active alert notifications with live direction/distance, and keeps the phone dashboard awake while open.
 - Release `0.9.11` smooths countdown/distance UI updates without full-screen rerenders, moves phone arrow/distance into an adjacent same-height card, and posts Android Auto alerts as ongoing navigation-category car notifications independent of Google Maps detection.
 - Release `0.9.12` moves the Controls panel (scan radius and refresh cadence sliders) from `MainActivity` to `SettingsActivity`, and fixes Android Auto notification delivery by switching from `CarAppExtender`/`CarNotificationManager` (which require a registered `CarAppService`) to `MessagingStyle` with `CATEGORY_MESSAGE`.
+- Release `0.9.17` fixes `WazeWebViewFetcher` cookie timing: debounces `onPageFinished` (800ms after last redirect) and extends JS init wait to 5s so Waze session cookies are fully set before the georss fetch.
 - Release `0.9.16` replaces FlareSolverr as the default Waze fetch method with a `WazeWebViewFetcher`: a hidden `WebView` that loads `waze.com/live-map/`, waits 2 s for JS cookies to be set, then executes `fetch()` from within the browser context via `evaluateJavascript` + `@JavascriptInterface`; FlareSolverr remains available if a URL is configured. `WazeLiveMapAlertProvider` now takes `Context`; `AlertRepository` exposes `destroy()` which is called from `AlertMonitorService.onDestroy()`.
 - Release `0.9.15` adds FlareSolverr session warmup: before the first API call, loads `waze.com/live-map/` via the same session to establish Waze cookies; resets warmup flag on HTML response so the next cycle retries; logs first 300 chars of solution body for diagnosis.
 - Release `0.9.14` adds `android:usesCleartextTraffic="true"` to allow HTTP traffic to the FlareSolverr proxy (Android 9+ blocks cleartext by default).

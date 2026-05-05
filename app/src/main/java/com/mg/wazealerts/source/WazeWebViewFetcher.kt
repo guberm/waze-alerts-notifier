@@ -18,6 +18,8 @@ import kotlinx.coroutines.withTimeout
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 
+private val mainHandler = Handler(Looper.getMainLooper())
+
 class WazeWebViewFetcher(context: Context) {
     private val appContext = context.applicationContext
     @Volatile private var webView: WebView? = null
@@ -55,10 +57,16 @@ class WazeWebViewFetcher(context: Context) {
                     settings.userAgentString = USER_AGENT
                     addJavascriptInterface(JsBridge(), "WazeAndroid")
                 }
+                var debounceRunnable: Runnable? = null
                 wv.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         AppLogger.i(TAG, "Page finished: $url")
-                        if (!initDeferred.isCompleted) initDeferred.complete(Unit)
+                        // Debounce: SPA has multiple redirect hops; complete 800ms after the last one
+                        debounceRunnable?.let { mainHandler.removeCallbacks(it) }
+                        debounceRunnable = Runnable {
+                            if (!initDeferred.isCompleted) initDeferred.complete(Unit)
+                        }
+                        mainHandler.postDelayed(debounceRunnable!!, 800)
                     }
                 }
                 wv.loadUrl(WARMUP_URL)
@@ -66,8 +74,8 @@ class WazeWebViewFetcher(context: Context) {
             }
 
             withTimeout(30_000) { initDeferred.await() }
-            // Give JS time to run and set cookies
-            delay(2_000)
+            // Give Waze JS time to initialize and set session cookies
+            delay(5_000)
             pageReady = true
             AppLogger.i(TAG, "WebView ready")
         }
