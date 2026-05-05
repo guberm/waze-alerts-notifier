@@ -5,7 +5,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 ## Current Scope
 
 - Package: `com.mg.wazealerts`
-- Current app version: `0.9.25` / `versionCode 35`
+- Current app version: `0.9.26` / `versionCode 36`
 - Build target: Android SDK 36
 - Minimum Android SDK: 26
 - Main artifact for release testing: debug APK from `app/build/outputs/apk/debug/app-debug.apk`
@@ -35,6 +35,7 @@ This repository is an Android/Kotlin prototype for Traffic Alerts Notifier, a Wa
 - Release `0.9.19` reverts to JS fetch inside WebView but with bare `fetch(url)` — no explicit headers. `Referer` is a forbidden header that the browser rejects when set manually; prior versions were likely triggering that. Same-origin request; cookies included by default.
 - Release `0.9.18` switches `WazeWebViewFetcher` from injected JS `fetch()` to direct HTTP with cookies extracted via `CookieManager.getInstance().getCookie("https://www.waze.com")` after warmup; logs cookie availability.
 - Release `0.9.17` fixes `WazeWebViewFetcher` cookie timing: debounces `onPageFinished` (800ms after last redirect) and extends JS init wait to 5s so Waze session cookies are fully set before the georss fetch.
+- Release `0.9.26` fixes two issues: (1) cross-provider duplicate alerts (Waze + TomTom reporting the same incident) — `AlertRepository.deduplicateNearby()` drops same-kind alerts within 200m, keeping the closest/first (Waze preferred); (2) race condition causing ~1-in-6 Waze fetch timeouts — `pendingNaUrl` is set before page load and injected as `window._wazeNaUrl` directly in `onPageFinished` (~800ms before env=il fires), eliminating the race where env=il beat `wazeSetNaUrl()` by a few ms.
 - Release `0.9.25` queues the `env=na` georss XHR to fire from the `env=il` load handler (after Waze's init call completes and sets session cookies); `env=na` fired before `env=il` completed was the root cause of 403; adds `shouldInterceptRequest` header logging for both env=il and env=na to diagnose remaining issues; fixes misleading "Timed out" error masking the real 403 from `onFetchError`.
 - Release `0.9.24` actively injects an XHR call for the real `env=na` georss URL after warmup (Waze never makes this call on its own); adds `onFetchError` bridge method so non-200 responses fail immediately instead of timing out after 30 s; XHR error/non-200 events now reported via `onFetchError(status, url)`.
 - Release `0.9.23` fixes `WazeWebViewFetcher` env=il cache poisoning: the URL is now passed as a second arg to `WazeAndroid.onResult()`; the bridge discards any response where the URL contains `env=il` (Waze's zero-bbox init call that always returns empty data and was being cached as the warmup response).

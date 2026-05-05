@@ -11,8 +11,8 @@ android {
         applicationId = "com.mg.wazealerts"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "0.9.25"
+        versionCode = 36
+        versionName = "0.9.26"
     }
 
     compileOptions {

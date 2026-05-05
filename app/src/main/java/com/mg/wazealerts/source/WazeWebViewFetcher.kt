@@ -33,6 +33,8 @@ class WazeWebViewFetcher(context: Context) {
     // Cache the last successfully intercepted Waze response (including calls during warmup)
     @Volatile private var lastCapturedResponse: String? = null
     @Volatile private var lastCapturedAt: Long = 0
+    // URL to pre-inject into _wazeNaUrl on each onPageFinished, before env=il fires
+    @Volatile private var pendingNaUrl: String? = null
 
     inner class JsBridge {
         @JavascriptInterface
@@ -96,6 +98,13 @@ class WazeWebViewFetcher(context: Context) {
                         AppLogger.i(TAG, "Warmup page finished: $url")
                         // Inject interceptor on every page finish — Waze calls georss ~800ms after
                         view.evaluateJavascript(INTERCEPTOR_SCRIPT, null)
+                        // Pre-set _wazeNaUrl here so it's ready when env=il fires (~800ms later).
+                        // Without this, wazeSetNaUrl() called after ensureReady() races with env=il.
+                        val naUrl = pendingNaUrl
+                        if (naUrl != null) {
+                            val escaped = naUrl.replace("'", "\\'")
+                            view.evaluateJavascript("window._wazeNaUrl = '$escaped';", null)
+                        }
                         debounceRunnable?.let { mainHandler.removeCallbacks(it) }
                         debounceRunnable = Runnable {
                             if (!initDeferred.isCompleted) initDeferred.complete(Unit)
@@ -128,6 +137,7 @@ class WazeWebViewFetcher(context: Context) {
 
     suspend fun fetch(url: String): String {
         val (lat, lng) = extractCenter(url) ?: (DEFAULT_LAT to DEFAULT_LNG)
+        pendingNaUrl = url  // pre-inject into _wazeNaUrl on next onPageFinished, before env=il fires
         ensureReady(lat, lng)
 
         // Use response already captured during warmup if it's fresh

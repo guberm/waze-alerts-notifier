@@ -8,6 +8,8 @@ import com.mg.wazealerts.settings.AppSettings
 import java.io.IOException
 import java.util.Locale
 
+private const val DEDUP_RADIUS_METERS = 200f
+
 class AlertRepository(context: Context) {
     private val appContext = context.applicationContext
     private val demoProvider = DemoAlertProvider()
@@ -26,6 +28,7 @@ class AlertRepository(context: Context) {
             )
             .filter { it.kind in settings.enabledKinds() }
             .sortedBy { it.distanceMeters }
+            .deduplicateNearby()
             .map { it.withResolvedAddress() }
     }
 
@@ -55,6 +58,23 @@ class AlertRepository(context: Context) {
         } catch (_: IllegalArgumentException) {
             null
         }
+    }
+
+    private fun List<RoadAlert>.deduplicateNearby(): List<RoadAlert> {
+        val kept = mutableListOf<RoadAlert>()
+        for (alert in this) {
+            val isDupe = kept.any { other ->
+                other.kind == alert.kind && distanceBetween(alert, other) < DEDUP_RADIUS_METERS
+            }
+            if (!isDupe) kept.add(alert)
+        }
+        return kept
+    }
+
+    private fun distanceBetween(a: RoadAlert, b: RoadAlert): Float {
+        val result = FloatArray(1)
+        Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, result)
+        return result[0]
     }
 
     fun destroy() = wazeProvider.destroy()
