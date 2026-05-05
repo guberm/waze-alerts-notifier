@@ -4,7 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -12,7 +14,6 @@ import android.webkit.WebViewClient
 import com.mg.wazealerts.AppLogger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -29,49 +30,62 @@ class WazeWebViewFetcher(context: Context) {
     private val initMutex = Mutex()
     private val pendingResult = AtomicReference<CompletableDeferred<String>?>()
 
+    // Cache the last successfully intercepted Waze response (including calls during warmup)
+    @Volatile private var lastCapturedResponse: String? = null
+    @Volatile private var lastCapturedAt: Long = 0
+
     inner class JsBridge {
         @JavascriptInterface
         fun onResult(text: String) {
             val trimmed = text.trim()
             if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                AppLogger.d(TAG, "Navigation response received (${text.length} chars)")
-                pendingResult.get()?.complete(text)
+                AppLogger.d(TAG, "Intercepted Waze georss response (${text.length} chars)")
+                lastCapturedResponse = trimmed
+                lastCapturedAt = System.currentTimeMillis()
+                pendingResult.get()?.complete(trimmed)
             } else {
-                AppLogger.e(TAG, "Navigation response is not JSON: ${trimmed.take(120)}")
-                pendingResult.get()?.completeExceptionally(IOException("Not JSON: ${trimmed.take(80)}"))
+                AppLogger.e(TAG, "Waze georss response not JSON: ${trimmed.take(120)}")
             }
-        }
-
-        @JavascriptInterface
-        fun onError(msg: String) {
-            AppLogger.e(TAG, "JS error: $msg")
-            pendingResult.get()?.completeExceptionally(IOException(msg))
         }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun ensureReady() {
+    private suspend fun ensureReady(lat: Double, lng: Double) {
         if (pageReady && webView != null) return
         initMutex.withLock {
             if (pageReady && webView != null) return
             pageReady = false
             val initDeferred = CompletableDeferred<Unit>()
+            // Clear stale cache when reinitializing
+            lastCapturedResponse = null
 
             withContext(Dispatchers.Main) {
-                AppLogger.i(TAG, "Initializing WebView — loading $WARMUP_URL")
+                // Load with our coordinates so Waze centers on the right area
+                val pageUrl = "https://www.waze.com/live-map/?ll=$lat,$lng"
+                AppLogger.i(TAG, "Initializing WebView — loading $pageUrl")
+
                 val wv = webView ?: WebView(appContext).also { webView = it }
                 wv.settings.javaScriptEnabled = true
                 wv.settings.domStorageEnabled = true
                 wv.settings.userAgentString = USER_AGENT
                 if (wv.tag == null) {
                     wv.addJavascriptInterface(JsBridge(), "WazeAndroid")
-                    wv.tag = "initialized"
+                    wv.tag = "init"
+                }
+
+                // Grant geolocation so Waze can center on the real device position
+                wv.webChromeClient = object : WebChromeClient() {
+                    override fun onGeolocationPermissionsShowPrompt(
+                        origin: String, callback: GeolocationPermissions.Callback
+                    ) = callback.invoke(origin, true, false)
                 }
 
                 var debounceRunnable: Runnable? = null
                 wv.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         AppLogger.i(TAG, "Warmup page finished: $url")
+                        // Inject interceptor on every page finish — Waze calls georss ~800ms after
+                        view.evaluateJavascript(INTERCEPTOR_SCRIPT, null)
                         debounceRunnable?.let { mainHandler.removeCallbacks(it) }
                         debounceRunnable = Runnable {
                             if (!initDeferred.isCompleted) initDeferred.complete(Unit)
@@ -79,72 +93,54 @@ class WazeWebViewFetcher(context: Context) {
                         mainHandler.postDelayed(debounceRunnable!!, 800)
                     }
 
-                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
-                        // Diagnostic: log any georss calls Waze makes on its own
+                    override fun shouldInterceptRequest(
+                        view: WebView, request: WebResourceRequest
+                    ): WebResourceResponse? {
                         if ("georss" in request.url.toString()) {
-                            AppLogger.i(TAG, "Waze native georss call detected: ${request.url}")
+                            AppLogger.i(TAG, "Waze native georss call: ${request.url}")
                         }
                         return null
                     }
                 }
-                wv.loadUrl(WARMUP_URL)
+                wv.loadUrl(pageUrl)
             }
 
             withTimeout(30_000) { initDeferred.await() }
-            // Give Waze JS time to initialize and set session cookies
-            delay(5_000)
             pageReady = true
-            AppLogger.i(TAG, "WebView ready")
+            AppLogger.i(TAG, "WebView ready — interceptor active")
         }
     }
 
     suspend fun fetch(url: String): String {
-        ensureReady()
+        val (lat, lng) = extractCenter(url) ?: (DEFAULT_LAT to DEFAULT_LNG)
+        ensureReady(lat, lng)
 
-        val deferred = CompletableDeferred<String>()
-        pendingResult.set(deferred)
-
-        withContext(Dispatchers.Main) {
-            val wv = webView ?: throw IOException("WebView not available")
-            AppLogger.d(TAG, "Navigating WebView to georss URL: $url")
-
-            // Navigate the WebView directly to the georss URL (Sec-Fetch-Mode: navigate,
-            // not cors). The warmup session's cookies are still active.
-            wv.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, pageUrl: String) {
-                    if ("georss" !in pageUrl) return
-                    // Extract the page body — for JSON responses the WebView shows raw text
-                    view.evaluateJavascript(
-                        "(function(){ WazeAndroid.onResult(document.body.innerText); })()", null
-                    )
-                }
-
-                override fun onReceivedHttpError(
-                    view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse
-                ) {
-                    if (request.isForMainFrame) {
-                        val code = errorResponse.statusCode
-                        AppLogger.d(TAG, "Navigation HTTP error: $code")
-                        pendingResult.get()?.completeExceptionally(IOException("HTTP $code"))
-                    }
-                }
-            }
-
-            // Leaving the warmup page — must re-init next time
-            pageReady = false
-            wv.loadUrl(url)
+        // Use response already captured during warmup if it's fresh
+        val cached = lastCapturedResponse
+        if (cached != null && System.currentTimeMillis() - lastCapturedAt < 60_000) {
+            AppLogger.d(TAG, "Returning Waze georss captured during warmup")
+            return cached
         }
 
-        return withTimeout(30_000) { deferred.await() }
+        // Wait for the next intercepted Waze call
+        val deferred = CompletableDeferred<String>()
+        pendingResult.set(deferred)
+        return try {
+            withTimeout(30_000) { deferred.await() }
+        } catch (e: Exception) {
+            throw IOException("Timed out waiting for Waze georss response")
+        }
     }
 
     fun invalidate() {
         pageReady = false
+        lastCapturedResponse = null
         AppLogger.i(TAG, "WebView session invalidated — will reinit on next fetch")
     }
 
     fun destroy() {
         pageReady = false
+        lastCapturedResponse = null
         Handler(Looper.getMainLooper()).post {
             webView?.destroy()
             webView = null
@@ -152,10 +148,44 @@ class WazeWebViewFetcher(context: Context) {
         }
     }
 
+    private fun extractCenter(georssUrl: String): Pair<Double, Double>? = try {
+        val params = georssUrl.substringAfter("?").split("&")
+            .mapNotNull { it.split("=", limit = 2).takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } }
+            .toMap()
+        val lat = ((params["top"]?.toDouble() ?: return null) + (params["bottom"]?.toDouble() ?: return null)) / 2
+        val lng = ((params["left"]?.toDouble() ?: return null) + (params["right"]?.toDouble() ?: return null)) / 2
+        lat to lng
+    } catch (_: Exception) { null }
+
     companion object {
         private const val TAG = "WazeWebView"
-        private const val WARMUP_URL = "https://www.waze.com/live-map/"
+        private const val DEFAULT_LAT = 43.45
+        private const val DEFAULT_LNG = -79.75
         private const val USER_AGENT =
             "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36"
+
+        // Monkey-patches window.fetch to forward georss responses to the Android bridge.
+        // Waze's own authenticated fetch calls succeed; we just eavesdrop on the response.
+        private const val INTERCEPTOR_SCRIPT = """
+(function() {
+    if (window._wazeIntercepted) return;
+    window._wazeIntercepted = true;
+    var _orig = window.fetch;
+    window.fetch = function(input, init) {
+        var url = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+        var p = _orig.apply(this, arguments);
+        if (url.indexOf('georss') !== -1) {
+            p.then(function(r) {
+                if (r.ok) {
+                    r.clone().text().then(function(t) {
+                        if (window.WazeAndroid) window.WazeAndroid.onResult(t);
+                    });
+                }
+            }).catch(function(){});
+        }
+        return p;
+    };
+})();
+"""
     }
 }
