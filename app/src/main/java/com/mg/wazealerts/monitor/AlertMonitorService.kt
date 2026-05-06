@@ -49,7 +49,9 @@ class AlertMonitorService : Service() {
     private lateinit var alertStore: AlertStore
     private val notifiedIds = linkedSetOf<String>()
     private var isMapsNavigating = false
-    private val prevDistances = HashMap<String, Float>()
+    private var isRunning = false
+    private val minDistanceSeen = HashMap<String, Float>()
+    private val lastNotifiedFingerprint = HashMap<String, String>()
     private var lastGeocodedLocation: Location? = null
     private var lastAlertRefreshAtMillis = 0L
     private var lastUiBroadcastAtMillis = 0L
@@ -63,14 +65,14 @@ class AlertMonitorService : Service() {
             settings.mapsNavigationActive = isMapsNavigating
             when {
                 !was && isMapsNavigating -> {
-                    prevDistances.clear()
+                    minDistanceSeen.clear()
                     AppLogger.i(TAG, "Navigation started")
                 }
                 was && !isMapsNavigating -> {
                     alertStore.clearPassed()
                     settings.currentLocationAddress = ""
                     settings.navDestination = ""
-                    prevDistances.clear()
+                    minDistanceSeen.clear()
                     cancelAlertNotifications()
                     AppLogger.i(TAG, "Navigation ended — cleared passed alerts")
                 }
@@ -106,6 +108,8 @@ class AlertMonitorService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (isRunning) return START_STICKY
+        isRunning = true
         AppLogger.i(TAG, "Service started (radius=${settings.radiusMeters}m, interval=${settings.pollIntervalMillis}ms)")
 
         ServiceCompat.startForeground(
@@ -119,6 +123,7 @@ class AlertMonitorService : Service() {
     }
 
     override fun onDestroy() {
+        isRunning = false
         fusedLocation.removeLocationUpdates(locationCallback)
         unregisterReceiver(navReceiver)
         repository.destroy()
@@ -168,7 +173,8 @@ class AlertMonitorService : Service() {
             lastAlertRefreshAtMillis = System.currentTimeMillis()
             val cached = mergeCachedAlerts(fetched, alertStore.cachedAlerts(alertCacheTtlMillis()), location)
             val visible = visibleAlerts(cached, location)
-            updatePassedAlerts(visible, location)
+            val passCheckAlerts = cached.filterNot { alertStore.passedAlertIds().contains(it.id) }.take(50)
+            updatePassedAlerts(passCheckAlerts, location)
 
             if (cached.isNotEmpty()) {
                 alertStore.saveCachedAlerts(cached, updateFetchedAt = fetched.isNotEmpty())
@@ -197,7 +203,8 @@ class AlertMonitorService : Service() {
 
         val updatedCache = current.map { it.withDistanceFrom(location) }.sortedBy { it.distanceMeters }
         val visible = visibleAlerts(updatedCache, location)
-        updatePassedAlerts(visible, location)
+        val passCheckAlerts = updatedCache.filterNot { alertStore.passedAlertIds().contains(it.id) }.take(50)
+        updatePassedAlerts(passCheckAlerts, location)
         if (cached.isNotEmpty()) {
             alertStore.saveCachedAlerts(updatedCache.take(MAX_CACHED_ALERTS), updateFetchedAt = false)
         }
@@ -261,29 +268,30 @@ class AlertMonitorService : Service() {
         settings.alertCacheTtlMinutes * 60_000L
 
     private fun updatePassedAlerts(alerts: List<RoadAlert>, location: Location) {
-        if (settings.lastBearingDegrees < 0f) {
-            prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
-            alerts.forEach { prevDistances[it.id] = it.distanceMeters }
-            return
-        }
-
         val bearing = settings.lastBearingDegrees
         for (alert in alerts) {
-            val prev = prevDistances[alert.id]
-            if (prev != null && alert.distanceMeters > prev + PASSED_DISTANCE_DELTA_METERS) {
-                val alertLoc = Location("").apply {
-                    latitude = alert.latitude
-                    longitude = alert.longitude
-                }
-                val diff = bearingDiff(bearing, location.bearingTo(alertLoc))
-                if (diff > PASSED_BEARING_DIFF_DEGREES) {
-                    alertStore.markPassed(alert.id)
-                    AppLogger.i(TAG, "Passed: ${alert.title} (${prev.toInt()}m -> ${alert.distanceMeters.toInt()}m, diff=${diff.toInt()}deg)")
-                }
+            val dist = alert.distanceMeters
+            if (dist < (minDistanceSeen[alert.id] ?: Float.MAX_VALUE)) {
+                minDistanceSeen[alert.id] = dist
             }
-            prevDistances[alert.id] = alert.distanceMeters
+            if (bearing < 0f) continue
+            val minSeen = minDistanceSeen[alert.id] ?: continue
+            if (minSeen > settings.radiusMeters) continue
+            if (dist < minSeen + PASSED_DISTANCE_DELTA_METERS) continue
+            val alertLoc = Location("").apply {
+                latitude = alert.latitude
+                longitude = alert.longitude
+            }
+            val diff = bearingDiff(bearing, location.bearingTo(alertLoc))
+            if (diff > PASSED_BEARING_DIFF_DEGREES) {
+                alertStore.markPassed(alert.id)
+                minDistanceSeen.remove(alert.id)
+                AppLogger.i(TAG, "Passed: ${alert.title} (minDist=${minSeen.toInt()}m → now=${dist.toInt()}m, diff=${diff.toInt()}deg)")
+            }
         }
-        prevDistances.keys.retainAll(alerts.map { it.id }.toSet())
+        if (minDistanceSeen.size > MAX_DISTANCE_TRACKING) {
+            minDistanceSeen.entries.filter { it.value > settings.radiusMeters }.forEach { minDistanceSeen.remove(it.key) }
+        }
     }
 
     private fun syncAlertNotifications(alerts: List<RoadAlert>, location: Location) {
@@ -304,9 +312,11 @@ class AlertMonitorService : Service() {
 
         current.forEach { alert ->
             val isNew = notifiedIds.add(alert.id)
-            showAlert(alert, location)
-            if (isNew) {
-                AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
+            val fp = notifFingerprint(alert, location)
+            if (isNew || lastNotifiedFingerprint[alert.id] != fp) {
+                showAlert(alert, location)
+                lastNotifiedFingerprint[alert.id] = fp
+                if (isNew) AppLogger.i(TAG, "Notifying: ${alert.title} at ${alert.distanceMeters.toInt()}m")
             }
         }
         while (notifiedIds.size > MAX_NOTIFIED_IDS) {
@@ -360,12 +370,12 @@ class AlertMonitorService : Service() {
 
     private fun showAlert(alert: RoadAlert, location: Location) {
         val directionLine = directionDistanceLine(alert, location)
-        val text = "$directionLine — ${alert.addressLine()}"
-        val sender = Person.Builder().setName(alert.kind.label).setBot(true).build()
+        val senderName = "${alert.kind.label}: $directionLine"
+        val sender = Person.Builder().setName(senderName).setBot(true).build()
         val style = NotificationCompat.MessagingStyle(sender)
-            .setConversationTitle(alert.title)
+            .setConversationTitle(senderName)
             .setGroupConversation(false)
-            .addMessage(text, System.currentTimeMillis(), sender)
+            .addMessage(alert.addressLine(), System.currentTimeMillis(), sender)
         val replyFlags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
         val replyIntent = PendingIntent.getBroadcast(
@@ -392,8 +402,8 @@ class AlertMonitorService : Service() {
             .build()
         val builder = NotificationCompat.Builder(this, CHANNEL_ALERTS)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(alert.title)
-            .setContentText(text)
+            .setContentTitle(senderName)
+            .setContentText(alert.addressLine())
             .setStyle(style)
             .setContentIntent(contentIntent())
             .addAction(replyAction)
@@ -409,10 +419,12 @@ class AlertMonitorService : Service() {
     private fun cancelAlertNotifications() {
         notifiedIds.toList().forEach { cancelAlertNotification(it) }
         notifiedIds.clear()
+        lastNotifiedFingerprint.clear()
     }
 
     private fun cancelAlertNotification(alertId: String) {
         getSystemService(NotificationManager::class.java).cancel(alertId.hashCode())
+        lastNotifiedFingerprint.remove(alertId)
     }
 
     private fun createChannels() {
@@ -459,6 +471,15 @@ class AlertMonitorService : Service() {
 
     private fun RoadAlert.addressLine(): String =
         address?.takeIf { it.isNotBlank() } ?: "%.5f, %.5f".format(Locale.US, latitude, longitude)
+
+    private fun notifFingerprint(alert: RoadAlert, location: Location): String {
+        val target = Location("").apply { latitude = alert.latitude; longitude = alert.longitude }
+        val distBucket = (location.distanceTo(target) / CAR_NOTIF_DISTANCE_BUCKET_METERS).toInt()
+        val heading = if (location.hasBearing()) location.bearing else settings.lastBearingDegrees
+        val arrow = if (heading >= 0f) relativeArrow(normalizeDegrees(location.bearingTo(target) - heading))
+                    else compassArrow(location.bearingTo(target))
+        return "$arrow:$distBucket"
+    }
 
     private fun directionDistanceLine(alert: RoadAlert, location: Location): String {
         val target = Location("").apply {
@@ -519,11 +540,13 @@ class AlertMonitorService : Service() {
         private const val LIVE_DISTANCE_INTERVAL_MILLIS = 2_000L
         private const val LIVE_DISTANCE_MIN_INTERVAL_MILLIS = 1_000L
         private const val LIVE_DISTANCE_MIN_MOVE_METERS = 5f
-        private const val PASSED_DISTANCE_DELTA_METERS = 250f
+        private const val PASSED_DISTANCE_DELTA_METERS = 200f
         private const val PASSED_BEARING_DIFF_DEGREES = 100f
         private const val MAX_NOTIFIED_IDS = 100
         private const val MAX_VISIBLE_CAR_NOTIFICATIONS = 3
         private const val MAX_CACHED_ALERTS = 200
+        private const val MAX_DISTANCE_TRACKING = 500
+        private const val CAR_NOTIF_DISTANCE_BUCKET_METERS = 100f
         private const val DISTANCE_UI_BUCKET_METERS = 10f
         private const val MIN_UI_BROADCAST_INTERVAL_MILLIS = 2_000L
         private const val MAX_UI_BROADCAST_INTERVAL_MILLIS = 5_000L
