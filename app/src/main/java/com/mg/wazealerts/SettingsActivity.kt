@@ -2,12 +2,15 @@ package com.mg.wazealerts
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlarmManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
@@ -42,6 +45,11 @@ class SettingsActivity : Activity() {
         palette = UiPalette.from(this, settings.themeMode)
         palette.applyWindow(this)
         render()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::root.isInitialized) render()
     }
 
     private fun render() {
@@ -215,9 +223,6 @@ class SettingsActivity : Activity() {
             addSwitch("OpenStreetMap cameras", settings.osmCamerasEnabled) {
                 settings.osmCamerasEnabled = it
             }
-            addSwitch("Demo alert source", settings.demoAlertsEnabled) {
-                settings.demoAlertsEnabled = it
-            }
 
             addView(text("TomTom API key", 14f, palette.body), blockParams(top = 10.dp))
             val tomTomKeyField = EditText(this@SettingsActivity).apply {
@@ -259,28 +264,184 @@ class SettingsActivity : Activity() {
 
     private fun permissionPanel() {
         root.addView(panel {
-            addView(sectionHeader("Permissions", "Location and notifications are required for monitoring."))
-            addView(Button(this@SettingsActivity).apply {
-                text = "Grant permissions"
-                palette.styleButton(this)
-                setOnClickListener { requestNeededPermissions() }
-            }, blockParams(top = 8.dp))
-            addView(Button(this@SettingsActivity).apply {
-                text = "Open system settings"
-                palette.styleButton(this)
-                setOnClickListener {
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.fromParts("package", packageName, null)
-                    })
+            addView(sectionHeader("Permissions", "Tap any row to grant or open system settings."))
+
+            addView(permissionRow(
+                label = "Fine location",
+                description = "Required to detect alerts near your position.",
+                granted = isPermissionGranted(Manifest.permission.ACCESS_FINE_LOCATION),
+                action = {
+                    ActivityCompat.requestPermissions(
+                        this@SettingsActivity,
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                        REQ_LOCATION
+                    )
                 }
-            }, blockParams(top = 8.dp))
-            addView(Button(this@SettingsActivity).apply {
-                text = "Notification Access (for Maps)"
-                palette.styleButton(this)
-                setOnClickListener {
-                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            ), blockParams(top = 10.dp))
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                addView(permissionRow(
+                    label = "Background location (Always)",
+                    description = "Choose \"Allow all the time\" so monitoring works with the screen off.",
+                    granted = isPermissionGranted(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+                    action = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            openAppDetails()
+                        } else {
+                            ActivityCompat.requestPermissions(
+                                this@SettingsActivity,
+                                arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION),
+                                REQ_BG_LOCATION
+                            )
+                        }
+                    }
+                ), blockParams(top = 10.dp))
+            }
+
+            if (Build.VERSION.SDK_INT >= 33) {
+                addView(permissionRow(
+                    label = "Notifications",
+                    description = "Required to deliver road-alert notifications.",
+                    granted = isPermissionGranted(Manifest.permission.POST_NOTIFICATIONS),
+                    action = {
+                        ActivityCompat.requestPermissions(
+                            this@SettingsActivity,
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            REQ_NOTIFICATIONS
+                        )
+                    }
+                ), blockParams(top = 10.dp))
+            }
+
+            addView(permissionRow(
+                label = "Notification access (Maps)",
+                description = "Lets the app detect Google Maps navigation for ahead-only filtering.",
+                granted = isNotificationListenerEnabled(),
+                action = {
+                    runCatching {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }.onFailure { openAppDetails() }
                 }
+            ), blockParams(top = 10.dp))
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                addView(permissionRow(
+                    label = "Exact alarms",
+                    description = "Used by the watchdog heartbeat to revive the service quickly if Android kills it.",
+                    granted = canScheduleExactAlarms(),
+                    action = {
+                        runCatching {
+                            startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                            })
+                        }.onFailure { openAppDetails() }
+                    }
+                ), blockParams(top = 10.dp))
+            }
+
+            addView(permissionRow(
+                label = "Unrestricted battery",
+                description = "Required for Android Auto reliability — prevents Doze from killing the service.",
+                granted = isIgnoringBatteryOptimizations(),
+                action = {
+                    runCatching {
+                        @Suppress("BatteryLife")
+                        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                        })
+                    }.onFailure {
+                        runCatching {
+                            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        }.onFailure { openAppDetails() }
+                    }
+                }
+            ), blockParams(top = 10.dp))
+
+            addView(Button(this@SettingsActivity).apply {
+                text = "Open all app settings"
+                palette.styleButton(this)
+                setOnClickListener { openAppDetails() }
+            }, blockParams(top = 14.dp))
+
+            addView(Button(this@SettingsActivity).apply {
+                text = "Re-check status"
+                palette.styleButton(this, compact = true)
+                setOnClickListener { render() }
             }, blockParams(top = 8.dp))
+        })
+    }
+
+    private fun permissionRow(
+        label: String,
+        description: String,
+        granted: Boolean,
+        action: () -> Unit
+    ): LinearLayout {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12.dp, 10.dp, 12.dp, 10.dp)
+            background = rounded(palette.surface, palette.border)
+        }
+        val titleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        titleRow.addView(
+            text(label, 14f, palette.title, bold = true),
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        )
+        titleRow.addView(statusBadge(granted))
+        container.addView(titleRow)
+        container.addView(text(description, 12f, palette.secondary), blockParams(top = 4.dp))
+        container.addView(Button(this).apply {
+            text = if (granted) "Open settings" else "Grant"
+            palette.styleButton(this, compact = true)
+            setOnClickListener {
+                action()
+                postDelayed({ if (!isFinishing) render() }, 400)
+            }
+        }, blockParams(top = 8.dp))
+        return container
+    }
+
+    private fun statusBadge(granted: Boolean): TextView {
+        val (label, fg, bg) = if (granted) {
+            Triple("Granted", 0xFF1F8B4C.toInt(), 0x331F8B4C)
+        } else {
+            Triple("Not granted", 0xFFCC3D3D.toInt(), 0x33CC3D3D)
+        }
+        return TextView(this).apply {
+            text = label
+            textSize = 11f
+            setTextColor(fg)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(10.dp, 3.dp, 10.dp, 3.dp)
+            background = rounded(bg, fg)
+        }
+    }
+
+    private fun isPermissionGranted(name: String): Boolean =
+        ContextCompat.checkSelfPermission(this, name) == PackageManager.PERMISSION_GRANTED
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
+        return flat.split(":").any { it.startsWith("$packageName/") }
+    }
+
+    private fun canScheduleExactAlarms(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return am.canScheduleExactAlarms()
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun openAppDetails() {
+        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.fromParts("package", packageName, null)
         })
     }
 
@@ -467,6 +628,9 @@ class SettingsActivity : Activity() {
         if (meters >= 1000) "${meters / 1000} km" else "$meters m"
 
     companion object {
+        private const val REQ_LOCATION = 100
+        private const val REQ_BG_LOCATION = 101
+        private const val REQ_NOTIFICATIONS = 102
         private val RADIUS_STEPS = intArrayOf(100, 200, 300, 500, 1000, 2000, 3000)
         private val REFRESH_STEPS_MILLIS = longArrayOf(30_000L, 60_000L, 120_000L, 180_000L, 300_000L)
         private val CACHE_TTL_STEPS_MINUTES = intArrayOf(5, 10, 20, 30, 60, 120)

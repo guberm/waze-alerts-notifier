@@ -91,7 +91,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Notifications: stale alert notifications swept on start and cleared on monitoring stop\n• Keep-alive: AlarmManager heartbeat (60s on Android Auto / 5 min off) revives service if it dies\n• Auto-start after device boot or app update when monitoring is enabled\n• WorkManager periodic backup watchdog every 15 minutes\n• Crash handler schedules immediate restart on uncaught exceptions")
+                .setMessage("• Settings → Permissions: per-permission status badges and one-tap grant/open-settings for fine/background location, notifications, notification access, exact alarms, and battery-optimization whitelist\n• Demo alert source removed from Sources panel (real providers only)\n• 0.9.31: notification dismissal cleanup + Android Auto keep-alive (heartbeat watchdog, boot auto-start, crash restart)")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }

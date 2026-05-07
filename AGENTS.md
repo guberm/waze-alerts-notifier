@@ -42,5 +42,12 @@ Stats: 17 obs (6,382t read) | 893,242t work | 99% savings
 2016 " 🔴 Race condition: env=il fires 3-4ms before wazeSetNaUrl() called → ~1-in-6 fetch timeouts
 2017 " ✅ v0.9.26: AlertRepository.deduplicateNearby() drops same-kind alerts within 200m (Waze preferred); pendingNaUrl pre-injected as _wazeNaUrl in onPageFinished (~800ms before env=il) to eliminate race
 
+### May 7, 2026
+
+2030 " ✅ v0.9.31: keep-alive infra — ServiceWatchdog (AlarmManager heartbeat 60s on AA / 5min off via androidx.car.app CarConnection), WatchdogWorker (WorkManager periodic 15min), BootReceiver auto-start on BOOT_COMPLETED/MY_PACKAGE_REPLACED, RestartReceiver, UncaughtExceptionHandler with AlarmManager restart, onDestroy schedules restart while monitoring still enabled
+2031 " ✅ v0.9.31: notification cleanup — cancelAlertNotifications() sweeps NotificationManager.activeNotifications by channelId=road_alerts (no longer relies on in-memory notifiedIds set), sweepStaleAlertNotifications() runs on service start to clear orphans from prior process kill, onDestroy() always cancels alert notifications
+2032 " 🟣 v0.9.32: SettingsActivity Permissions panel rebuilt as per-permission rows with green/red status badges (Granted / Not granted) and Grant/Open-settings button per row — covers fine location, background location, POST_NOTIFICATIONS, notification listener access, SCHEDULE_EXACT_ALARM (Android 12+), and battery-optimization whitelist; onResume() re-renders to refresh status after returning from system settings
+2033 " ✅ v0.9.32: Demo alert source toggle removed from Sources panel UI (DemoAlertProvider and AppSettings.demoAlertsEnabled remain in code for testing)
+
 Access 893k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

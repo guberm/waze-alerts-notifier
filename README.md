@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.31` (`versionCode 41`).
+Current version: `0.9.32` (`versionCode 42`).
 
 ## What works
 
@@ -23,6 +23,8 @@ Current version: `0.9.31` (`versionCode 41`).
 - Phone dashboard keeps the screen awake while it is open.
 - Service watchdog keeps `AlertMonitorService` alive while monitoring is enabled: AlarmManager heartbeat (60 s when Android Auto is connected, 5 min otherwise), WorkManager periodic backup every 15 min, auto-start after device boot, and AlarmManager-based restart on uncaught exceptions or unexpected service destruction.
 - Stale alert notifications are swept on service start and on `onDestroy()`, so notifications no longer linger after a process kill or when monitoring is stopped.
+- Settings → Permissions panel lists each runtime/special-access permission (Fine location, Background location, Notifications, Notification access, Exact alarms, Unrestricted battery) with a green/red status badge and a `Grant` / `Open settings` button per row.
+- Demo alert source toggle removed from Settings; only real providers (Waze Live Map, OpenStreetMap cameras, optional TomTom) are surfaced in the UI.
 - Smooth live movement updates: countdown, nearest distance, and per-alert direction/distance labels update without rebuilding the full phone screen.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Appearance setting with System, Light, and Dark modes.
