@@ -301,8 +301,14 @@ class AlertMonitorService : Service() {
         }
 
         val passed = alertStore.passedAlertIds()
+        val heading = if (location.hasBearing()) location.bearing else settings.lastBearingDegrees
         val current = alerts
             .filterNot { alertStore.isMuted(it.id) || it.id in passed }
+            .let { list ->
+                if (isMapsNavigating && settings.routeFilterEnabled && heading >= 0f)
+                    list.filter { alertIsAheadOf(it, location, heading) }
+                else list
+            }
             .take(MAX_VISIBLE_CAR_NOTIFICATIONS)
         val currentIds = current.map { it.id }.toSet()
         notifiedIds.filterNot { it in currentIds }.toList().forEach { id ->
@@ -349,6 +355,11 @@ class AlertMonitorService : Service() {
                 }
             }.onFailure { AppLogger.w(TAG, "Geocode current pos failed: ${it.message}") }
         }
+    }
+
+    private fun alertIsAheadOf(alert: RoadAlert, location: Location, heading: Float): Boolean {
+        val target = Location("").apply { latitude = alert.latitude; longitude = alert.longitude }
+        return bearingDiff(heading, location.bearingTo(target)) <= 75f
     }
 
     private fun bearingDiff(a: Float, b: Float): Float {

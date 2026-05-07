@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.27` (`versionCode 37`).
+Current version: `0.9.30` (`versionCode 40`).
 
 ## What works
 
