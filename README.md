@@ -2,7 +2,7 @@
 
 Android/Kotlin prototype for nearby road-alert notifications.
 
-Current version: `0.9.30` (`versionCode 40`).
+Current version: `0.9.31` (`versionCode 41`).
 
 ## What works
 
@@ -21,6 +21,8 @@ Current version: `0.9.30` (`versionCode 40`).
 - Movement cache controls in Settings for cache time, min/max cache radius, radius expansion, and visible alert limit.
 - Direction + live distance in a dedicated adjacent phone alert card and dynamic Android Auto alert notifications.
 - Phone dashboard keeps the screen awake while it is open.
+- Service watchdog keeps `AlertMonitorService` alive while monitoring is enabled: AlarmManager heartbeat (60 s when Android Auto is connected, 5 min otherwise), WorkManager periodic backup every 15 min, auto-start after device boot, and AlarmManager-based restart on uncaught exceptions or unexpected service destruction.
+- Stale alert notifications are swept on service start and on `onDestroy()`, so notifications no longer linger after a process kill or when monitoring is stopped.
 - Smooth live movement updates: countdown, nearest distance, and per-alert direction/distance labels update without rebuilding the full phone screen.
 - Main dashboard for radius, refresh time, active alerts, navigation, and per-alert mute controls.
 - Appearance setting with System, Light, and Dark modes.

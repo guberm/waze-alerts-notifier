@@ -79,6 +79,10 @@ class MainActivity : Activity() {
         refreshAlerts()
         ensureNotificationPermission()
         showChangelogIfUpdated()
+        if (settings.monitoringEnabled) {
+            com.mg.wazealerts.monitor.ServiceWatchdog.startMonitoring(this)
+            com.mg.wazealerts.monitor.ServiceWatchdog.scheduleWatchdog(this)
+        }
     }
 
     private fun showChangelogIfUpdated() {
@@ -87,7 +91,7 @@ class MainActivity : Activity() {
             settings.lastVersionCode = currentVersion
             AlertDialog.Builder(this)
                 .setTitle("What's new in v${BuildConfig.VERSION_NAME}")
-                .setMessage("• Waze: env=na georss now fires after env=il cookies land (403 fix)\n• Waze: request headers logged for diagnosis\n• Default nav app setting (Google Maps / Waze)\n• Notification tap opens app (Android Auto fix)")
+                .setMessage("• Notifications: stale alert notifications swept on start and cleared on monitoring stop\n• Keep-alive: AlarmManager heartbeat (60s on Android Auto / 5 min off) revives service if it dies\n• Auto-start after device boot or app update when monitoring is enabled\n• WorkManager periodic backup watchdog every 15 minutes\n• Crash handler schedules immediate restart on uncaught exceptions")
                 .setPositiveButton("OK") { d, _ -> d.dismiss() }
                 .show()
         }

@@ -439,10 +439,13 @@ class SettingsActivity : Activity() {
 
     private fun startMonitoring() {
         requestNeededPermissions()
-        ContextCompat.startForegroundService(this, Intent(this, AlertMonitorService::class.java))
+        com.mg.wazealerts.monitor.ServiceWatchdog.startMonitoring(this)
+        com.mg.wazealerts.monitor.ServiceWatchdog.scheduleWatchdog(this)
     }
 
     private fun stopMonitoring() {
+        com.mg.wazealerts.monitor.ServiceWatchdog.cancelWatchdog(this)
+        com.mg.wazealerts.monitor.ServiceWatchdog.cancelHeartbeat(this)
         stopService(Intent(this, AlertMonitorService::class.java))
     }
 

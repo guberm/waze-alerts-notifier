@@ -36,8 +36,12 @@ import kotlinx.coroutines.launch
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import android.os.Handler
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import androidx.car.app.connection.CarConnection
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import com.mg.wazealerts.AppLogger
 import java.util.Locale
 
@@ -57,6 +61,10 @@ class AlertMonitorService : Service() {
     private var lastUiBroadcastAtMillis = 0L
     private var lastVisibleIdsFingerprint = ""
     private var lastVisibleDistanceFingerprint = ""
+    private var carConnectionLiveData: LiveData<Int>? = null
+    private var carConnectionObserver: Observer<Int>? = null
+    private var androidAutoConnected = false
+    private var lastHeartbeatAtMillis = 0L
 
     private val navReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -95,11 +103,50 @@ class AlertMonitorService : Service() {
         isMapsNavigating = settings.mapsNavigationActive
         fusedLocation = LocationServices.getFusedLocationProviderClient(this)
         createChannels()
+        sweepStaleAlertNotifications()
+        installCrashHandler()
+        observeCarConnection()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(navReceiver, IntentFilter("com.mg.wazealerts.MAPS_NAVIGATION_STATE"), Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(navReceiver, IntentFilter("com.mg.wazealerts.MAPS_NAVIGATION_STATE"))
         }
+    }
+
+    private fun installCrashHandler() {
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                AppLogger.e(TAG, "Uncaught exception in ${thread.name}: ${throwable.message}")
+                if (settings.monitoringEnabled) {
+                    ServiceWatchdog.scheduleImmediateRestart(applicationContext)
+                }
+            } catch (_: Throwable) {
+            } finally {
+                previous?.uncaughtException(thread, throwable)
+                    ?: android.os.Process.killProcess(android.os.Process.myPid())
+            }
+        }
+    }
+
+    private fun observeCarConnection() {
+        runCatching {
+            val live = CarConnection(this).type
+            val observer = Observer<Int> { state ->
+                val connected = state == CarConnection.CONNECTION_TYPE_PROJECTION ||
+                    state == CarConnection.CONNECTION_TYPE_NATIVE
+                if (connected != androidAutoConnected) {
+                    androidAutoConnected = connected
+                    AppLogger.i(TAG, "Android Auto connection changed: connected=$connected (state=$state)")
+                    if (isRunning) refreshHeartbeat(force = true)
+                }
+            }
+            Handler(Looper.getMainLooper()).post {
+                live.observeForever(observer)
+            }
+            carConnectionLiveData = live
+            carConnectionObserver = observer
+        }.onFailure { AppLogger.w(TAG, "CarConnection observe failed: ${it.message}") }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -119,16 +166,44 @@ class AlertMonitorService : Service() {
             if (Build.VERSION.SDK_INT >= 29) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
         )
         requestLocationUpdates()
+        ServiceWatchdog.scheduleWatchdog(applicationContext)
+        refreshHeartbeat(force = true)
         return START_STICKY
     }
 
     override fun onDestroy() {
         isRunning = false
         fusedLocation.removeLocationUpdates(locationCallback)
-        unregisterReceiver(navReceiver)
+        runCatching { unregisterReceiver(navReceiver) }
+        cancelAlertNotifications()
+        val observer = carConnectionObserver
+        val live = carConnectionLiveData
+        if (observer != null && live != null) {
+            Handler(Looper.getMainLooper()).post {
+                runCatching { live.removeObserver(observer) }
+            }
+        }
+        carConnectionObserver = null
+        carConnectionLiveData = null
         repository.destroy()
         scope.cancel()
+        if (settings.monitoringEnabled) {
+            AppLogger.w(TAG, "onDestroy with monitoring still enabled — scheduling restart")
+            ServiceWatchdog.scheduleImmediateRestart(applicationContext)
+        } else {
+            ServiceWatchdog.cancelHeartbeat(applicationContext)
+            ServiceWatchdog.cancelWatchdog(applicationContext)
+        }
         super.onDestroy()
+    }
+
+    private fun refreshHeartbeat(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        val intervalMs = if (androidAutoConnected) HEARTBEAT_INTERVAL_AA_MILLIS else HEARTBEAT_INTERVAL_DEFAULT_MILLIS
+        val minResetGapMs = intervalMs / 2
+        if (!force && now - lastHeartbeatAtMillis < minResetGapMs) return
+        lastHeartbeatAtMillis = now
+        ServiceWatchdog.setHeartbeat(applicationContext, intervalMs)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -150,6 +225,7 @@ class AlertMonitorService : Service() {
         if (location.hasBearing()) settings.lastBearingDegrees = location.bearing
         settings.lastLatitude = location.latitude.toFloat()
         settings.lastLongitude = location.longitude.toFloat()
+        refreshHeartbeat()
 
         scope.launch {
             AppLogger.d(TAG, "Location: %.4f,%.4f bearing=%s".format(
@@ -428,14 +504,34 @@ class AlertMonitorService : Service() {
     }
 
     private fun cancelAlertNotifications() {
-        notifiedIds.toList().forEach { cancelAlertNotification(it) }
+        val nm = getSystemService(NotificationManager::class.java)
+        notifiedIds.toList().forEach { nm.cancel(it.hashCode()) }
         notifiedIds.clear()
         lastNotifiedFingerprint.clear()
+        if (Build.VERSION.SDK_INT >= 23) {
+            runCatching {
+                nm.activeNotifications
+                    .filter { it.notification.channelId == CHANNEL_ALERTS }
+                    .forEach { nm.cancel(it.id) }
+            }
+        }
     }
 
     private fun cancelAlertNotification(alertId: String) {
         getSystemService(NotificationManager::class.java).cancel(alertId.hashCode())
         lastNotifiedFingerprint.remove(alertId)
+    }
+
+    private fun sweepStaleAlertNotifications() {
+        if (Build.VERSION.SDK_INT < 23) return
+        val nm = getSystemService(NotificationManager::class.java)
+        runCatching {
+            val stale = nm.activeNotifications.filter { it.notification.channelId == CHANNEL_ALERTS }
+            if (stale.isNotEmpty()) {
+                AppLogger.i(TAG, "Sweeping ${stale.size} stale alert notifications from prior run")
+                stale.forEach { nm.cancel(it.id) }
+            }
+        }
     }
 
     private fun createChannels() {
@@ -564,5 +660,7 @@ class AlertMonitorService : Service() {
         private const val ACTION_REPLY = "com.mg.wazealerts.ACTION_REPLY"
         private const val ACTION_MARK_READ = "com.mg.wazealerts.ACTION_MARK_READ"
         private const val KEY_REPLY = "key_reply"
+        private const val HEARTBEAT_INTERVAL_DEFAULT_MILLIS = 5 * 60_000L
+        private const val HEARTBEAT_INTERVAL_AA_MILLIS = 60_000L
     }
 }
